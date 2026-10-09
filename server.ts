@@ -94,14 +94,14 @@ export interface VisitorSessionRecord {
   licenseCode?: string | null;
 }
 
-// Initial Default Vault configuration with newly updated Bot and Admin Passwords
+// Initial Default Vault configuration with ultra-secure Bot and Admin Passwords
 const INITIAL_VAULT: VaultData = {
-  saltB64: 'gXhMpC1Ww/GK4u6pZEh2dQ==', // HasoneBot2026!
-  hashB64: '+i5rz7hHXMW4kb5ctAsQINKgpQkOtpQpio1cKW9821Y=',
+  saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
+  hashB64: 'oL/YQjYZMcrZh5BiQPsoBh1pVBJF7HIcHHjNyP+yKqQ=',
   iterations: 210000,
-  sessionVersion: `epoch_${Date.now()}_hasone_reset_security`,
-  adminSaltB64: 'XkJsHXEd7x7XpzqclyTQHw==', // HasoneAdmin2026!
-  adminHashB64: 'jCe3dYx3fXgO0yzl5mB8h/NI/sy7qTuELGJloQnzDQA=',
+  sessionVersion: `epoch_${Date.now()}_hasone_ultrasecure`,
+  adminSaltB64: 'UfZXfwImn1eQcdiei2ddqA==', // Hasone@Admin#7744!Vault
+  adminHashB64: '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=',
   updatedAt: new Date().toISOString(),
 };
 
