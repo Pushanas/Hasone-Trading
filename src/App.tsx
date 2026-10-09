@@ -17,6 +17,7 @@ import { DEFAULT_PAIRS } from './constants/pairs';
 import { GeneratorConfig, SignalItem, SignalResult } from './types';
 import { checkSessionValidity } from './utils/crypto';
 import { formatSingleSignalMono } from './utils/formatter';
+import { initVisitorAnalytics, trackPageView } from './utils/visitorTracker';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 mins
 
@@ -29,6 +30,17 @@ export default function App() {
 
   // Navigation Tabs: NavTabType ('live' | 'generator' | 'analyzer' | 'collection' | 'table' | 'calculator')
   const [activeTab, setActiveTab] = useState<NavTabType>('live');
+
+  // Track initial visitor session and lightweight periodic heartbeat (~45s)
+  useEffect(() => {
+    const cleanup = initVisitorAnalytics(`/${activeTab}`);
+    return cleanup;
+  }, []);
+
+  // Track pageviews on tab changes
+  useEffect(() => {
+    trackPageView(`/${activeTab}`);
+  }, [activeTab]);
 
   const [availablePairs, setAvailablePairs] = useState<string[]>(() => {
     const saved = localStorage.getItem('areen_custom_pairs');

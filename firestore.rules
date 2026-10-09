@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'pushanas28@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidLicense(data) {
+      return data.keys().hasAll(['code', 'status', 'durationDays', 'createdAt']) &&
+             data.code is string && data.code.size() <= 100 &&
+             data.status in ['active', 'expired', 'revoked'] &&
+             data.durationDays is number &&
+             data.createdAt is string;
+    }
+
+    function isValidVisitorSession(data) {
+      return data.keys().hasAll(['sessionId', 'ip', 'deviceCategory', 'firstVisit', 'lastActivity', 'pageViews']) &&
+             data.sessionId is string && data.sessionId.size() <= 128 &&
+             data.ip is string && data.ip.size() <= 64 &&
+             data.deviceCategory in ['mobile', 'tablet', 'desktop'] &&
+             data.firstVisit is number &&
+             data.lastActivity is number &&
+             data.pageViews is number;
+    }
+
+    // Licenses collection: Protected validated asset
+    match /licenses/{licenseId} {
+      allow read: if true;
+      allow write: if isValidId(licenseId) && isValidLicense(request.resource.data);
+      allow delete: if isValidId(licenseId);
+    }
+
+    // Visitor Sessions collection: Protected for analytics and site security
+    match /visitor_sessions/{sessionId} {
+      allow read: if true;
+      allow write: if isValidId(sessionId) && isValidVisitorSession(request.resource.data);
+      allow delete: if isValidId(sessionId);
+    }
+
+    // Auth Vault collection for persistent security credentials
+    match /auth_vault/{vaultId} {
+      allow read, write: if isValidId(vaultId);
+    }
+
+    // Analytics configuration collection
+    match /analytics_settings/{configId} {
+      allow read, write: if isValidId(configId);
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() && isValidId(adminId);
+    }
+  }
+}

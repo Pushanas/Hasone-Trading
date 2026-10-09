@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "License": {
+      "title": "License",
+      "description": "VIP Access license code for algorithmic trading system",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Unique VIP license code key"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "expired", "revoked"],
+          "description": "Current lifecycle status of license"
+        },
+        "durationDays": {
+          "type": "number",
+          "description": "Validity period in days"
+        },
+        "boundIp": {
+          "type": "string",
+          "description": "Client IP address bound upon first activation"
+        },
+        "boundDevice": {
+          "type": "string",
+          "description": "Client device fingerprint hash"
+        },
+        "firstActivatedAt": {
+          "type": "number",
+          "description": "Timestamp in ms when license was first used"
+        },
+        "expiresAt": {
+          "type": "number",
+          "description": "Timestamp in ms when license expires"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO date string when license was generated"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Administrative notes or client assignment details"
+        },
+        "usageCount": {
+          "type": "number",
+          "description": "Number of times license session was verified/accessed"
+        }
+      },
+      "required": ["code", "status", "durationDays", "createdAt"]
+    },
+    "VisitorSession": {
+      "title": "VisitorSession",
+      "description": "Legitimate visitor session for analytics and site security",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Randomly generated visitor session identifier"
+        },
+        "ip": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Public IP address observed by the server"
+        },
+        "deviceCategory": {
+          "type": "string",
+          "enum": ["mobile", "tablet", "desktop"],
+          "description": "Detected device category"
+        },
+        "browser": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Detected browser name and version"
+        },
+        "os": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Detected operating system"
+        },
+        "firstVisit": {
+          "type": "number",
+          "description": "Timestamp in ms of first page visit"
+        },
+        "lastActivity": {
+          "type": "number",
+          "description": "Timestamp in ms of last observed heartbeat or navigation"
+        },
+        "currentPath": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Current page path without sensitive parameters"
+        },
+        "pageViews": {
+          "type": "number",
+          "description": "Total page views during this session"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "inactive"],
+          "description": "Session status"
+        }
+      },
+      "required": ["sessionId", "ip", "deviceCategory", "firstVisit", "lastActivity", "pageViews"]
+    },
+    "AnalyticsConfig": {
+      "title": "AnalyticsConfig",
+      "description": "Configuration settings for analytics retention and policies",
+      "type": "object",
+      "properties": {
+        "retentionDays": {
+          "type": "number",
+          "description": "Days to retain visitor session logs (default 30)"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Timestamp of last config update"
+        }
+      },
+      "required": ["retentionDays"]
+    }
+  },
+  "firestore": {
+    "/licenses/{licenseId}": {
+      "schema": "License",
+      "description": "Collection of VIP access licenses"
+    },
+    "/visitor_sessions/{sessionId}": {
+      "schema": "VisitorSession",
+      "description": "Collection of visitor sessions for analytics and security"
+    },
+    "/analytics_settings/{configId}": {
+      "schema": "AnalyticsConfig",
+      "description": "System analytics retention policy configuration"
+    }
+  }
+}

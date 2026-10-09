@@ -3,8 +3,33 @@ import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { GoogleGenAI } from '@google/genai';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  setLogLevel,
+} from 'firebase/firestore';
+
+// Suppress benign internal gRPC idle stream disconnect warnings
+setLogLevel('error');
+
+// Filter out benign background stream disconnects from logging as uncaught rejections
+process.on('unhandledRejection', (reason) => {
+  const msg = typeof reason === 'object' && reason !== null && 'message' in reason ? String((reason as any).message) : String(reason);
+  if (msg.includes('CANCELLED') || msg.includes('idle stream') || msg.includes('new targets')) {
+    return;
+  }
+  console.error('[Server Unhandled Rejection]:', reason);
+});
 
 const app = express();
+app.set('trust proxy', true);
 app.use(express.json());
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -14,6 +39,20 @@ const LICENSES_FILE = path.resolve(DATA_DIR, 'licenses.json');
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Initialize Firestore
+const CONFIG_PATH = path.resolve(process.cwd(), 'firebase-applet-config.json');
+let firestoreDb: any = null;
+if (fs.existsSync(CONFIG_PATH)) {
+  try {
+    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    const fbApp = getApps().length ? getApp() : initializeApp(config);
+    firestoreDb = getFirestore(fbApp, config.firestoreDatabaseId);
+    console.log('[Firestore] Connected to persistent database:', config.firestoreDatabaseId);
+  } catch (err) {
+    console.warn('[Firestore] Failed to connect:', err);
+  }
 }
 
 interface VaultData {
@@ -36,9 +75,23 @@ export interface LicenseRecord {
   expiresAt: number | null;
   createdAt: string;
   notes: string;
+  usageCount?: number;
 }
 
-// Initial Default Vault configuration (Master Password: Hasone#2026!Vip | Admin Password: Hasone#Admin9481!Vip)
+export interface VisitorSessionRecord {
+  sessionId: string;
+  ip: string;
+  deviceCategory: 'mobile' | 'tablet' | 'desktop';
+  browser: string;
+  os: string;
+  firstVisit: number;
+  lastActivity: number;
+  currentPath: string;
+  pageViews: number;
+  status: 'active' | 'inactive';
+}
+
+// Initial Default Vault configuration
 const INITIAL_VAULT: VaultData = {
   saltB64: 'uXuniMOMGKZO7q8iZONJKg==',
   hashB64: 'D/ZnpnsivcWenhYN4FKUiruJWhnU11mvmKfVn9cmEYg=',
@@ -60,9 +113,10 @@ const INITIAL_LICENSES: LicenseRecord[] = [
     expiresAt: null,
     createdAt: new Date().toISOString(),
     notes: 'كود VIP حصري لمنصة Hasone Trading لجهاز وعنوان IP واحد فقط لمدة 30 يوماً',
+    usageCount: 0,
   },
   {
-    code: 'AREEN-VIP-30D-9842-6311-GOLD',
+    code: 'HASONE-VIP-30D-7814-9923-GOLD',
     status: 'active',
     durationDays: 30,
     boundIp: null,
@@ -70,42 +124,214 @@ const INITIAL_LICENSES: LicenseRecord[] = [
     firstActivatedAt: null,
     expiresAt: null,
     createdAt: new Date().toISOString(),
-    notes: 'كود VIP حصري لجهاز وعنوان IP واحد فقط لمدة شهر كامل (30 يوماً من لحظة التفعيل)',
+    notes: 'كود VIP حصري لمنصة Hasone Trading لجهاز وعنوان IP واحد فقط لمدة شهر كامل (30 يوماً من لحظة التفعيل)',
+    usageCount: 0,
   },
 ];
 
-function getVault(): VaultData {
+let cachedVault: VaultData = INITIAL_VAULT;
+let cachedLicenses: LicenseRecord[] = [...INITIAL_LICENSES];
+const visitorSessionsMap = new Map<string, VisitorSessionRecord>();
+let retentionDays = 30;
+
+function getVaultFromLocalDisk(): VaultData {
   try {
     if (fs.existsSync(AUTH_FILE)) {
       const content = fs.readFileSync(AUTH_FILE, 'utf-8');
       return JSON.parse(content);
     }
-  } catch {
-    // ignore
-  }
-  fs.writeFileSync(AUTH_FILE, JSON.stringify(INITIAL_VAULT, null, 2));
+  } catch {}
   return INITIAL_VAULT;
 }
 
-function saveVault(data: VaultData) {
-  fs.writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2));
+function saveVaultToLocalDisk(data: VaultData) {
+  try {
+    fs.writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2));
+  } catch {}
 }
 
-function getLicenses(): LicenseRecord[] {
+function getLicensesFromLocalDisk(): LicenseRecord[] {
   try {
     if (fs.existsSync(LICENSES_FILE)) {
       const content = fs.readFileSync(LICENSES_FILE, 'utf-8');
-      return JSON.parse(content);
+      const list = JSON.parse(content);
+      if (Array.isArray(list)) {
+        return list.map((lic) => {
+          if (lic.code && lic.code.includes('AREEN')) {
+            return {
+              ...lic,
+              code: lic.code.replace(/AREEN/g, 'HASONE'),
+              notes: (lic.notes || '').replace(/العرين/g, 'حسون').replace(/AREEN/g, 'HASONE') || 'كود تفعيل VIP حصري لمنصة Hasone Trading',
+            };
+          }
+          return lic;
+        });
+      }
     }
-  } catch {
-    // ignore
-  }
-  fs.writeFileSync(LICENSES_FILE, JSON.stringify(INITIAL_LICENSES, null, 2));
+  } catch {}
   return INITIAL_LICENSES;
 }
 
-function saveLicenses(data: LicenseRecord[]) {
-  fs.writeFileSync(LICENSES_FILE, JSON.stringify(data, null, 2));
+function saveLicensesToLocalDisk(data: LicenseRecord[]) {
+  try {
+    fs.writeFileSync(LICENSES_FILE, JSON.stringify(data, null, 2));
+  } catch {}
+}
+
+async function loadVault(): Promise<VaultData> {
+  if (firestoreDb) {
+    try {
+      const snap = await getDoc(doc(firestoreDb, 'auth_vault', 'master_vault'));
+      if (snap.exists()) {
+        cachedVault = snap.data() as VaultData;
+        saveVaultToLocalDisk(cachedVault);
+        return cachedVault;
+      } else {
+        await setDoc(doc(firestoreDb, 'auth_vault', 'master_vault'), INITIAL_VAULT);
+        cachedVault = INITIAL_VAULT;
+        saveVaultToLocalDisk(INITIAL_VAULT);
+        return cachedVault;
+      }
+    } catch (err) {
+      console.warn('[Firestore] Error loading vault:', err);
+    }
+  }
+  cachedVault = getVaultFromLocalDisk();
+  return cachedVault;
+}
+
+async function persistVault(vault: VaultData) {
+  cachedVault = vault;
+  saveVaultToLocalDisk(vault);
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'auth_vault', 'master_vault'), vault);
+    } catch (err) {
+      console.warn('[Firestore] Error persisting vault:', err);
+    }
+  }
+}
+
+async function loadLicenses(): Promise<LicenseRecord[]> {
+  if (firestoreDb) {
+    try {
+      const snap = await getDocs(collection(firestoreDb, 'licenses'));
+      const list: LicenseRecord[] = [];
+      snap.forEach((d) => {
+        list.push(d.data() as LicenseRecord);
+      });
+      if (list.length > 0) {
+        // Sanitize any existing licenses that contained AREEN
+        const sanitizedList: LicenseRecord[] = [];
+        for (const lic of list) {
+          if (lic.code && lic.code.includes('AREEN')) {
+            await deleteDoc(doc(firestoreDb, 'licenses', lic.code)).catch(() => {});
+            const cleaned: LicenseRecord = {
+              ...lic,
+              code: lic.code.replace(/AREEN/g, 'HASONE'),
+              notes: (lic.notes || '').replace(/العرين/g, 'حسون').replace(/AREEN/g, 'HASONE') || 'كود تفعيل VIP حصري لمنصة Hasone Trading',
+            };
+            await setDoc(doc(firestoreDb, 'licenses', cleaned.code), cleaned).catch(() => {});
+            sanitizedList.push(cleaned);
+          } else {
+            sanitizedList.push(lic);
+          }
+        }
+        cachedLicenses = sanitizedList;
+        saveLicensesToLocalDisk(sanitizedList);
+        return sanitizedList;
+      } else {
+        // Seed initial licenses into Firestore
+        for (const lic of INITIAL_LICENSES) {
+          await setDoc(doc(firestoreDb, 'licenses', lic.code), lic);
+        }
+        cachedLicenses = [...INITIAL_LICENSES];
+        saveLicensesToLocalDisk(INITIAL_LICENSES);
+        return cachedLicenses;
+      }
+    } catch (err) {
+      console.warn('[Firestore] Error loading licenses:', err);
+    }
+  }
+  cachedLicenses = getLicensesFromLocalDisk();
+  return cachedLicenses;
+}
+
+async function persistLicense(lic: LicenseRecord) {
+  const idx = cachedLicenses.findIndex((l) => l.code === lic.code);
+  if (idx !== -1) {
+    cachedLicenses[idx] = lic;
+  } else {
+    cachedLicenses.unshift(lic);
+  }
+  saveLicensesToLocalDisk(cachedLicenses);
+
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'licenses', lic.code), lic);
+    } catch (err) {
+      console.warn('[Firestore] Error persisting license:', lic.code, err);
+    }
+  }
+}
+
+async function removeLicense(code: string) {
+  cachedLicenses = cachedLicenses.filter((l) => l.code !== code);
+  saveLicensesToLocalDisk(cachedLicenses);
+  if (firestoreDb) {
+    try {
+      await deleteDoc(doc(firestoreDb, 'licenses', code));
+    } catch (err) {
+      console.warn('[Firestore] Error deleting license:', code, err);
+    }
+  }
+}
+
+// Visitor Sessions persistence
+async function loadVisitorSessions() {
+  if (firestoreDb) {
+    try {
+      // Load retention config
+      const confSnap = await getDoc(doc(firestoreDb, 'analytics_settings', 'config'));
+      if (confSnap.exists()) {
+        retentionDays = confSnap.data().retentionDays || 30;
+      } else {
+        await setDoc(doc(firestoreDb, 'analytics_settings', 'config'), { retentionDays: 30, updatedAt: Date.now() });
+      }
+
+      // Load sessions
+      const snap = await getDocs(collection(firestoreDb, 'visitor_sessions'));
+      snap.forEach((d) => {
+        const s = d.data() as VisitorSessionRecord;
+        visitorSessionsMap.set(s.sessionId, s);
+      });
+      console.log(`[Firestore] Successfully loaded ${visitorSessionsMap.size} visitor sessions.`);
+    } catch (err) {
+      console.warn('[Firestore] Error loading visitor sessions:', err);
+    }
+  }
+}
+
+async function persistVisitorSession(session: VisitorSessionRecord) {
+  visitorSessionsMap.set(session.sessionId, session);
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'visitor_sessions', session.sessionId), session);
+    } catch (err) {
+      console.warn('[Firestore] Error persisting visitor session:', session.sessionId, err);
+    }
+  }
+}
+
+async function deleteVisitorSessionRecord(sessionId: string) {
+  visitorSessionsMap.delete(sessionId);
+  if (firestoreDb) {
+    try {
+      await deleteDoc(doc(firestoreDb, 'visitor_sessions', sessionId));
+    } catch (err) {
+      console.warn('[Firestore] Error deleting visitor session:', sessionId, err);
+    }
+  }
 }
 
 function verifyPasswordAgainstVault(password: string, vault: VaultData): boolean {
@@ -145,19 +371,79 @@ function checkAdminAuth(req: Request): boolean {
 // Rate limiting memory
 const failedAttemptsMap = new Map<string, { count: number; lockedUntil: number }>();
 
-function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0].trim();
+function getObservedPublicIp(req: Request): string {
+  let ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.substring(7);
   }
-  return req.socket.remoteAddress || '127.0.0.1';
+  if (ip.includes(',')) {
+    ip = ip.split(',')[0].trim();
+  }
+  return ip;
+}
+
+function parseUserAgentDetails(uaString?: string) {
+  const ua = uaString || '';
+
+  // 1. Device category
+  let deviceCategory: 'mobile' | 'tablet' | 'desktop' = 'desktop';
+  if (/ipad|tablet|(android(?!.*mobile))/i.test(ua)) {
+    deviceCategory = 'tablet';
+  } else if (/mobile|iphone|ipod|android|blackberry|iemobile|opera mini/i.test(ua)) {
+    deviceCategory = 'mobile';
+  }
+
+  // 2. Operating System
+  let os = 'Unknown OS';
+  if (/windows nt 10/i.test(ua)) os = 'Windows 10/11';
+  else if (/windows nt 6\.3/i.test(ua)) os = 'Windows 8.1';
+  else if (/windows nt 6\.1/i.test(ua)) os = 'Windows 7';
+  else if (/windows/i.test(ua)) os = 'Windows';
+  else if (/iphone os ([0-9_]+)/i.test(ua)) {
+    const match = ua.match(/iphone os ([0-9_]+)/i);
+    os = `iOS ${match ? match[1].replace(/_/g, '.') : ''}`.trim();
+  } else if (/ipad.*os ([0-9_]+)/i.test(ua)) {
+    const match = ua.match(/os ([0-9_]+)/i);
+    os = `iPadOS ${match ? match[1].replace(/_/g, '.') : ''}`.trim();
+  } else if (/mac os x ([0-9_]+)/i.test(ua)) {
+    const match = ua.match(/mac os x ([0-9_]+)/i);
+    os = `macOS ${match ? match[1].replace(/_/g, '.') : ''}`.trim();
+  } else if (/android ([0-9.]+)/i.test(ua)) {
+    const match = ua.match(/android ([0-9.]+)/i);
+    os = `Android ${match ? match[1] : ''}`.trim();
+  } else if (/linux/i.test(ua)) {
+    os = 'Linux';
+  } else if (/cros/i.test(ua)) {
+    os = 'ChromeOS';
+  }
+
+  // 3. Browser
+  let browser = 'Unknown Browser';
+  if (/edg\/([0-9.]+)/i.test(ua)) {
+    const m = ua.match(/edg\/([0-9.]+)/i);
+    browser = `Edge ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/opr\/([0-9.]+)|opera/i.test(ua)) {
+    const m = ua.match(/opr\/([0-9.]+)/i);
+    browser = `Opera ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/chrome\/([0-9.]+)/i.test(ua)) {
+    const m = ua.match(/chrome\/([0-9.]+)/i);
+    browser = `Chrome ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/version\/([0-9.]+).*safari/i.test(ua)) {
+    const m = ua.match(/version\/([0-9.]+)/i);
+    browser = `Safari ${m ? m[1].split('.')[0] : ''}`.trim();
+  } else if (/firefox\/([0-9.]+)/i.test(ua)) {
+    const m = ua.match(/firefox\/([0-9.]+)/i);
+    browser = `Firefox ${m ? m[1].split('.')[0] : ''}`.trim();
+  }
+
+  return { deviceCategory, os, browser };
 }
 
 // API Routes
 // 1. Unified Authentication endpoint (supports both Master Password and 1-Month 1-IP/Device License Code)
-app.post('/api/auth/login', (req: Request, res: Response) => {
+app.post('/api/auth/login', async (req: Request, res: Response) => {
   const { password, code, deviceFingerprint } = req.body;
-  const ip = getClientIp(req);
+  const ip = getObservedPublicIp(req);
   const now = Date.now();
 
   const ipRecord = failedAttemptsMap.get(ip) || { count: 0, lockedUntil: 0 };
@@ -175,8 +461,8 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' });
   }
 
-  const vault = getVault();
-  const licenses = getLicenses();
+  const vault = cachedVault;
+  const licenses = cachedLicenses;
 
   // A. Check if input is a VIP Single-Device/IP License Code
   const cleanInputUpper = inputSecret.toUpperCase();
@@ -192,24 +478,23 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     if (lic.status === 'revoked') {
       return res.status(403).json({
         success: false,
-        error: '⚠️ تم إيقاف وتعطيل هذا الكود من قِبل إدارة العرين الذهبي.',
+        error: '⚠️ تم إيقاف وتعطيل هذا الكود من قِبل إدارة حسون Trading.',
       });
     }
 
-    // First time activation -> Bind to this IP and Device Fingerprint for 30 Days!
+    // First time activation -> Bind to this IP and Device Fingerprint for durationDays!
     if (!lic.firstActivatedAt) {
       lic.boundIp = ip;
       lic.boundDevice = devId;
       lic.firstActivatedAt = now;
       lic.expiresAt = now + (lic.durationDays || 30) * 24 * 60 * 60 * 1000;
       lic.status = 'active';
+      lic.usageCount = 1;
 
-      licenses[licenseIdx] = lic;
-      saveLicenses(licenses);
-
+      await persistLicense(lic);
       failedAttemptsMap.delete(ip);
 
-      const daysRemaining = 30;
+      const daysRemaining = lic.durationDays || 30;
       return res.json({
         success: true,
         type: 'license_vip',
@@ -225,10 +510,10 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     // Already activated -> Check Expiration
     if (lic.expiresAt && now > lic.expiresAt) {
       lic.status = 'expired';
-      saveLicenses(licenses);
+      await persistLicense(lic);
       return res.status(403).json({
         success: false,
-        error: '⏳ انتهت صلاحية هذا الكود (30 يوماً). يرجى التواصل مع الإدارة للتجديد.',
+        error: '⏳ انتهت صلاحية هذا الكود. يرجى التواصل مع الإدارة للتجديد.',
       });
     }
 
@@ -242,6 +527,10 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
         error: '🚫 هذا الكود مقفل ومربوط بجهاز وعنوان IP آخر فقط، ولا يمكن استخدامه على أي جهاز جديد أو مشاركته.',
       });
     }
+
+    // Record usage redemption
+    lic.usageCount = (lic.usageCount || 1) + 1;
+    await persistLicense(lic);
 
     failedAttemptsMap.delete(ip);
     const daysRemaining = Math.max(1, Math.ceil(((lic.expiresAt || now) - now) / (24 * 60 * 60 * 1000)));
@@ -282,7 +571,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     success: false,
     error:
       attemptsLeft === 0
-        ? 'تم قفل المحاولات مؤقتاً لحماية العرين الذهبي.'
+        ? 'تم قفل المحاولات مؤقتاً لحماية منصة حسون Trading.'
         : `كود التفعيل أو كلمة المرور غير صحيحة. متبقي ${attemptsLeft} محاولات.`,
     attemptsLeft,
   });
@@ -295,13 +584,13 @@ app.get('/api/auth/session-check', (req: Request, res: Response) => {
   res.setHeader('Expires', '0');
 
   const clientVersion = req.query.version;
-  const vault = getVault();
+  const vault = cachedVault;
 
   if (!clientVersion || clientVersion !== vault.sessionVersion) {
     return res.json({
       valid: false,
       reason: 'password_changed',
-      message: 'تم تغيير كلمة المرور الموحدة للعرين الذهبي. تم إنهاء الجلسة.',
+      message: 'تم تغيير كلمة المرور الموحدة لمنصة حسون Trading. تم إنهاء الجلسة.',
     });
   }
 
@@ -309,7 +598,7 @@ app.get('/api/auth/session-check', (req: Request, res: Response) => {
 });
 
 // 3. Change Unified Master Password - Kicks out all other devices immediately!
-app.post('/api/auth/change-password', (req: Request, res: Response) => {
+app.post('/api/auth/change-password', async (req: Request, res: Response) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {
@@ -328,7 +617,7 @@ app.post('/api/auth/change-password', (req: Request, res: Response) => {
     });
   }
 
-  const vault = getVault();
+  const vault = cachedVault;
   const isCurrentValid = verifyPasswordAgainstVault(cleanCurrent, vault);
 
   if (!isCurrentValid) {
@@ -347,10 +636,12 @@ app.post('/api/auth/change-password', (req: Request, res: Response) => {
     hashB64: newHash.toString('base64'),
     iterations: 210000,
     sessionVersion: newSessionVersion,
+    adminSaltB64: vault.adminSaltB64,
+    adminHashB64: vault.adminHashB64,
     updatedAt: new Date().toISOString(),
   };
 
-  saveVault(updatedVault);
+  await persistVault(updatedVault);
 
   return res.json({
     success: true,
@@ -359,11 +650,11 @@ app.post('/api/auth/change-password', (req: Request, res: Response) => {
   });
 });
 
-// ================= ADMIN MANAGEMENT APIS (Stealth 5-Click Trigger) =================
+// ================= ADMIN MANAGEMENT APIS =================
 // 1. Admin Login Verification
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const { password } = req.body;
-  const vault = getVault();
+  const vault = cachedVault;
 
   if (!password || !verifyAdminPasswordAgainstVault(String(password).trim(), vault)) {
     return res.status(401).json({ success: false, error: 'كلمة مرور لوحة الإدارة غير صحيحة' });
@@ -374,22 +665,33 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   return res.json({ success: true, token });
 });
 
-// 2. Fetch all licenses with stats
-app.get('/api/admin/licenses', (req: Request, res: Response) => {
+// 2. Fetch all codes / licenses with stats (supports both /api/admin/codes and /api/admin/licenses)
+const handleGetCodes = (req: Request, res: Response) => {
   if (!checkAdminAuth(req)) {
     return res.status(401).json({ success: false, error: 'غير مصرح بالوصول إلى لوحة الإدارة' });
   }
 
-  const licenses = getLicenses();
   const now = Date.now();
+  const licenses = cachedLicenses.map((lic) => {
+    if (lic.expiresAt && now > lic.expiresAt && lic.status === 'active') {
+      lic.status = 'expired';
+      persistLicense(lic);
+    }
+    return lic;
+  });
 
   const total = licenses.length;
-  const boundCount = licenses.filter(l => l.boundIp && l.status === 'active' && (!l.expiresAt || l.expiresAt > now)).length;
-  const unusedCount = licenses.filter(l => !l.firstActivatedAt && l.status === 'active').length;
-  const expiredOrRevokedCount = licenses.filter(l => l.status === 'revoked' || (l.expiresAt && l.expiresAt <= now)).length;
+  const boundCount = licenses.filter(
+    (l) => l.boundIp && l.status === 'active' && (!l.expiresAt || l.expiresAt > now)
+  ).length;
+  const unusedCount = licenses.filter((l) => !l.firstActivatedAt && l.status === 'active').length;
+  const expiredOrRevokedCount = licenses.filter(
+    (l) => l.status === 'revoked' || (l.expiresAt && l.expiresAt <= now)
+  ).length;
 
   return res.json({
     success: true,
+    codes: licenses,
     licenses,
     stats: {
       total,
@@ -398,10 +700,13 @@ app.get('/api/admin/licenses', (req: Request, res: Response) => {
       expiredOrRevokedCount,
     },
   });
-});
+};
 
-// 3. Generate New License Code (Single-Device / Single-IP)
-app.post('/api/admin/create-license', (req: Request, res: Response) => {
+app.get('/api/admin/codes', handleGetCodes);
+app.get('/api/admin/licenses', handleGetCodes);
+
+// 3. Generate New License Code (Single-Device / Single-IP) with Firestore persistence
+const handleCreateCode = async (req: Request, res: Response) => {
   if (!checkAdminAuth(req)) {
     return res.status(401).json({ success: false, error: 'غير مصرح بالوصول إلى لوحة الإدارة' });
   }
@@ -415,6 +720,11 @@ app.post('/api/admin/create-license', (req: Request, res: Response) => {
     ? String(customCode).trim().toUpperCase()
     : `HASONE-VIP-${days}D-${randomPart1}-${randomPart2}-GOLD`;
 
+  // Check if code already exists (Uniqueness requirement)
+  if (cachedLicenses.some((l) => l.code === code)) {
+    return res.status(400).json({ success: false, error: 'هذا الكود موجود مسبقاً، يرجى اختيار أو توليد كود آخر' });
+  }
+
   const newLicense: LicenseRecord = {
     code,
     status: 'active',
@@ -425,43 +735,79 @@ app.post('/api/admin/create-license', (req: Request, res: Response) => {
     expiresAt: null,
     createdAt: new Date().toISOString(),
     notes: notes ? String(notes).trim() : `كود VIP مخصص لجهاز و IP واحد (${days} يوماً)`,
+    usageCount: 0,
   };
 
-  const licenses = getLicenses();
-  // Check if code already exists
-  if (licenses.some(l => l.code === code)) {
-    return res.status(400).json({ success: false, error: 'هذا الكود موجود مسبقاً، اختر كوداً آخر' });
-  }
-
-  licenses.unshift(newLicense);
-  saveLicenses(licenses);
+  await persistLicense(newLicense);
 
   return res.json({
     success: true,
     license: newLicense,
-    message: 'تم إنشاء كود الترخيص بنجاح.',
+    code: newLicense,
+    message: 'تم إنشاء كود الترخيص وحفظه في قاعدة البيانات الدائمة بنجاح.',
+  });
+};
+
+app.post('/api/admin/create-license', handleCreateCode);
+app.post('/api/admin/codes', handleCreateCode);
+
+// 4. Update / Edit Code notes and duration
+app.post('/api/admin/update-code', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const { code, notes, durationDays } = req.body;
+  const idx = cachedLicenses.findIndex((l) => l.code === code);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'الكود غير موجود' });
+  }
+
+  const lic = cachedLicenses[idx];
+  if (notes !== undefined) {
+    lic.notes = String(notes).trim();
+  }
+  if (durationDays !== undefined && !isNaN(parseInt(durationDays))) {
+    const days = Math.max(1, parseInt(durationDays));
+    lic.durationDays = days;
+    // If already activated, recompute expiration
+    if (lic.firstActivatedAt) {
+      lic.expiresAt = lic.firstActivatedAt + days * 24 * 60 * 60 * 1000;
+      if (lic.expiresAt > Date.now() && lic.status === 'expired') {
+        lic.status = 'active';
+      }
+    }
+  }
+
+  await persistLicense(lic);
+
+  return res.json({
+    success: true,
+    license: lic,
+    message: 'تم تحديث بيانات الكود في قاعدة البيانات الدائمة بنجاح.',
   });
 });
 
-// 4. Reset Device Lock (Allow client to rebind on new phone)
-app.post('/api/admin/reset-device', (req: Request, res: Response) => {
+// 5. Reset Device Lock (Allow client to rebind on new device)
+app.post('/api/admin/reset-device', async (req: Request, res: Response) => {
   if (!checkAdminAuth(req)) {
     return res.status(401).json({ success: false, error: 'غير مصرح' });
   }
 
   const { code } = req.body;
-  const licenses = getLicenses();
-  const idx = licenses.findIndex(l => l.code === code);
+  const idx = cachedLicenses.findIndex((l) => l.code === code);
   if (idx === -1) {
     return res.status(404).json({ success: false, error: 'الكود غير موجود' });
   }
 
-  licenses[idx].boundIp = null;
-  licenses[idx].boundDevice = null;
-  licenses[idx].firstActivatedAt = null;
-  licenses[idx].expiresAt = null;
-  licenses[idx].status = 'active';
-  saveLicenses(licenses);
+  const lic = cachedLicenses[idx];
+  lic.boundIp = null;
+  lic.boundDevice = null;
+  lic.firstActivatedAt = null;
+  lic.expiresAt = null;
+  lic.status = 'active';
+
+  await persistLicense(lic);
 
   return res.json({
     success: true,
@@ -469,45 +815,43 @@ app.post('/api/admin/reset-device', (req: Request, res: Response) => {
   });
 });
 
-// 5. Toggle License Status (Revoke / Activate)
-app.post('/api/admin/toggle-status', (req: Request, res: Response) => {
+// 6. Toggle License Status (Revoke / Activate)
+app.post('/api/admin/toggle-status', async (req: Request, res: Response) => {
   if (!checkAdminAuth(req)) {
     return res.status(401).json({ success: false, error: 'غير مصرح' });
   }
 
   const { code } = req.body;
-  const licenses = getLicenses();
-  const idx = licenses.findIndex(l => l.code === code);
+  const idx = cachedLicenses.findIndex((l) => l.code === code);
   if (idx === -1) {
     return res.status(404).json({ success: false, error: 'الكود غير موجود' });
   }
 
-  licenses[idx].status = licenses[idx].status === 'revoked' ? 'active' : 'revoked';
-  saveLicenses(licenses);
+  const lic = cachedLicenses[idx];
+  lic.status = lic.status === 'revoked' ? 'active' : 'revoked';
+  await persistLicense(lic);
 
   return res.json({
     success: true,
-    newStatus: licenses[idx].status,
-    message: licenses[idx].status === 'revoked' ? 'تم تعطيل وإيقاف الكود فوراً' : 'تم تفعيل الكود مجدداً',
+    newStatus: lic.status,
+    message: lic.status === 'revoked' ? 'تم تعطيل وإيقاف الكود فوراً' : 'تم تفعيل الكود مجدداً',
   });
 });
 
-// 6. Delete License Code
-app.post('/api/admin/delete-license', (req: Request, res: Response) => {
+// 7. Delete License Code
+app.post('/api/admin/delete-license', async (req: Request, res: Response) => {
   if (!checkAdminAuth(req)) {
     return res.status(401).json({ success: false, error: 'غير مصرح' });
   }
 
   const { code } = req.body;
-  const licenses = getLicenses();
-  const filtered = licenses.filter(l => l.code !== code);
-  saveLicenses(filtered);
+  await removeLicense(code);
 
-  return res.json({ success: true, message: 'تم حذف الكود بنجاح' });
+  return res.json({ success: true, message: 'تم حذف الكود نهائياً من قاعدة البيانات.' });
 });
 
-// 7. Update Admin Password
-app.post('/api/admin/change-admin-password', (req: Request, res: Response) => {
+// 8. Update Admin Password
+app.post('/api/admin/change-admin-password', async (req: Request, res: Response) => {
   if (!checkAdminAuth(req)) {
     return res.status(401).json({ success: false, error: 'غير مصرح' });
   }
@@ -518,16 +862,268 @@ app.post('/api/admin/change-admin-password', (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: 'كلمة المرور يجب أن لا تقل عن 6 خانات' });
   }
 
-  const vault = getVault();
+  const vault = cachedVault;
   const newSalt = crypto.randomBytes(16);
   const newHash = crypto.pbkdf2Sync(clean, newSalt, 210000, 32, 'sha256');
 
   vault.adminSaltB64 = newSalt.toString('base64');
   vault.adminHashB64 = newHash.toString('base64');
   vault.updatedAt = new Date().toISOString();
-  saveVault(vault);
+  await persistVault(vault);
 
-  return res.json({ success: true, message: 'تم تحديث كلمة مرور لوحة الإدارة بنجاح' });
+  return res.json({ success: true, message: 'تم تحديث كلمة مرور لوحة الإدارة بنجاح.' });
+});
+
+// ================= VISITOR ANALYTICS APIS =================
+// 1. Session Inception / Page View Registration
+app.post('/api/analytics/session', async (req: Request, res: Response) => {
+  const { sessionId: clientSid, path: rawPath } = req.body;
+  const ip = getObservedPublicIp(req);
+  const now = Date.now();
+
+  const sid = (clientSid && typeof clientSid === 'string' && /^[a-zA-Z0-9_\-]+$/.test(clientSid) && clientSid.length <= 128)
+    ? clientSid
+    : `vs_${now}_${crypto.randomBytes(6).toString('hex')}`;
+
+  const cleanPath = typeof rawPath === 'string' ? rawPath.split('?')[0].slice(0, 200) || '/' : '/';
+  const uaDetails = parseUserAgentDetails(req.headers['user-agent']);
+
+  let session = visitorSessionsMap.get(sid);
+  if (session) {
+    session.lastActivity = now;
+    session.currentPath = cleanPath;
+    session.pageViews = (session.pageViews || 1) + 1;
+    session.status = 'active';
+    session.ip = ip;
+  } else {
+    session = {
+      sessionId: sid,
+      ip,
+      deviceCategory: uaDetails.deviceCategory,
+      browser: uaDetails.browser,
+      os: uaDetails.os,
+      firstVisit: now,
+      lastActivity: now,
+      currentPath: cleanPath,
+      pageViews: 1,
+      status: 'active',
+    };
+  }
+
+  await persistVisitorSession(session);
+
+  return res.json({
+    success: true,
+    sessionId: sid,
+    status: 'active',
+  });
+});
+
+// 2. Lightweight Heartbeat (approx every 45s while active)
+app.post('/api/analytics/heartbeat', async (req: Request, res: Response) => {
+  const { sessionId } = req.body;
+  if (!sessionId || typeof sessionId !== 'string') {
+    return res.status(400).json({ success: false, error: 'معرف الجلسة مطلوب' });
+  }
+
+  const now = Date.now();
+  let session = visitorSessionsMap.get(sessionId);
+
+  if (session) {
+    session.lastActivity = now;
+    session.status = 'active';
+    await persistVisitorSession(session);
+    return res.json({ success: true, status: 'active', lastActivity: now });
+  }
+
+  // Session not found in cache, create from heartbeat
+  const ip = getObservedPublicIp(req);
+  const uaDetails = parseUserAgentDetails(req.headers['user-agent']);
+  session = {
+    sessionId,
+    ip,
+    deviceCategory: uaDetails.deviceCategory,
+    browser: uaDetails.browser,
+    os: uaDetails.os,
+    firstVisit: now,
+    lastActivity: now,
+    currentPath: '/',
+    pageViews: 1,
+    status: 'active',
+  };
+
+  await persistVisitorSession(session);
+  return res.json({ success: true, status: 'active', lastActivity: now });
+});
+
+// 3. Analytics Summary (Admin Only)
+app.get('/api/admin/analytics/summary', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const now = Date.now();
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDayMs = startOfDay.getTime();
+
+  let activeNow = 0;
+  let visitsToday = 0;
+  const uniqueIpsToday = new Set<string>();
+
+  for (const s of visitorSessionsMap.values()) {
+    // 120s online threshold
+    const isOnline = now - s.lastActivity <= 120_000;
+    if (isOnline) {
+      activeNow++;
+    }
+    if (s.lastActivity >= startOfDayMs || s.firstVisit >= startOfDayMs) {
+      visitsToday += s.pageViews || 1;
+      uniqueIpsToday.add(s.ip || s.sessionId);
+    }
+  }
+
+  return res.json({
+    success: true,
+    activeNow,
+    visitsToday,
+    uniqueToday: uniqueIpsToday.size,
+    totalSessions: visitorSessionsMap.size,
+    retentionDays,
+  });
+});
+
+// 4. Detailed Visitor Sessions Table (Admin Only with search, status filter, and pagination)
+app.get('/api/admin/analytics/visitors', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const now = Date.now();
+  const search = String(req.query.search || '').trim().toLowerCase();
+  const statusFilter = String(req.query.status || 'all').toLowerCase();
+  const page = Math.max(1, parseInt(String(req.query.page)) || 1);
+  const limit = Math.max(5, Math.min(100, parseInt(String(req.query.limit)) || 15));
+
+  let list = Array.from(visitorSessionsMap.values()).map((s) => {
+    // Dynamically recalculate online status against 120-second threshold
+    const isOnline = now - s.lastActivity <= 120_000;
+    return {
+      ...s,
+      status: isOnline ? ('active' as const) : ('inactive' as const),
+      isOnline,
+    };
+  });
+
+  // Filter by search
+  if (search) {
+    list = list.filter(
+      (s) =>
+        s.ip.toLowerCase().includes(search) ||
+        s.browser.toLowerCase().includes(search) ||
+        s.os.toLowerCase().includes(search) ||
+        s.currentPath.toLowerCase().includes(search) ||
+        s.sessionId.toLowerCase().includes(search)
+    );
+  }
+
+  // Filter by status
+  if (statusFilter === 'active') {
+    list = list.filter((s) => s.status === 'active');
+  } else if (statusFilter === 'inactive') {
+    list = list.filter((s) => s.status === 'inactive');
+  }
+
+  // Sort by last activity descending (most recent first)
+  list.sort((a, b) => b.lastActivity - a.lastActivity);
+
+  const total = list.length;
+  const totalPages = Math.ceil(total / limit) || 1;
+  const paginated = list.slice((page - 1) * limit, page * limit);
+
+  return res.json({
+    success: true,
+    visitors: paginated,
+    total,
+    page,
+    limit,
+    totalPages,
+  });
+});
+
+// 5. Delete single visitor session (Admin Only)
+app.delete('/api/admin/analytics/visitor', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const sessionId = String(req.query.sessionId || req.body?.sessionId || '').trim();
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: 'معرف الجلسة مطلوب' });
+  }
+
+  await deleteVisitorSessionRecord(sessionId);
+  return res.json({ success: true, message: 'تم حذف سجل الجلسة بنجاح.' });
+});
+
+// 6. Cleanup old sessions based on retention policy (Admin Only)
+app.post('/api/admin/analytics/cleanup', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  let deletedCount = 0;
+
+  for (const [sid, session] of visitorSessionsMap.entries()) {
+    if (session.lastActivity < cutoff) {
+      await deleteVisitorSessionRecord(sid);
+      deletedCount++;
+    }
+  }
+
+  return res.json({
+    success: true,
+    deletedCount,
+    message: `تم تنظيف السجلات الأقدم من ${retentionDays} يوماً بنجاح (تم حذف ${deletedCount} سجل).`,
+  });
+});
+
+// 7. Get / Set Retention Policy (Admin Only)
+app.get('/api/admin/analytics/retention', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+  return res.json({ success: true, retentionDays });
+});
+
+app.post('/api/admin/analytics/retention', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const days = parseInt(req.body.retentionDays);
+  if (isNaN(days) || days < 1 || days > 365) {
+    return res.status(400).json({ success: false, error: 'يرجى إدخال عدد أيام صالح بين 1 و 365 يوماً' });
+  }
+
+  retentionDays = days;
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'analytics_settings', 'config'), {
+        retentionDays: days,
+        updatedAt: Date.now(),
+      });
+    } catch (err) {
+      console.warn('[Firestore] Failed to save retention policy:', err);
+    }
+  }
+
+  return res.json({
+    success: true,
+    retentionDays: days,
+    message: `تم ضبط سياسة الاحتفاظ بسجلات الزوار إلى ${days} يوماً.`,
+  });
 });
 
 // ================= QUOTEX LIVE OTC MARKET FEED & QUANT ENGINE =================
@@ -724,9 +1320,6 @@ app.post('/api/ai/quotex-analyze', async (req: Request, res: Response) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4500);
-
         const prompt = `بناءً على بيانات الشموع اليابانية التالية (Open, High, Low, Close, Volume) للأصل المالي ${pairSymbol || 'USD/BRL OTC'} على منصة Quotex OTC:
 ${candlesTable}
 
@@ -751,37 +1344,30 @@ Return ONLY valid JSON in this exact structure:
   "strategyBadge": "👑 حسون Golden Breakout (Quotex VIP)"
 }`;
 
-        const rawRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' },
-            }),
-            signal: controller.signal,
-          }
-        );
-        clearTimeout(timeout);
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
 
-        if (rawRes.ok) {
-          const rawData = await rawRes.json();
-          const text = rawData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const parsed = JSON.parse(text);
-            return res.json({
-              success: true,
-              source: 'quotex_quant_engine',
-              decision: parsed.decision || 'CALL',
-              aiThesis: parsed.aiThesis,
-              confidence: parsed.confidence,
-              strategyBadge: parsed.strategyBadge,
-            });
-          }
+        const text = response.text;
+        if (text) {
+          const parsed = JSON.parse(text);
+          return res.json({
+            success: true,
+            source: 'quotex_quant_engine',
+            decision: parsed.decision || 'CALL',
+            aiThesis: parsed.aiThesis,
+            confidence: parsed.confidence,
+            strategyBadge: parsed.strategyBadge,
+          });
         }
-      } catch {
-        // Fall back gracefully
+      } catch (aiErr) {
+        // Fall back gracefully to local quant engine
+        console.warn('Gemini quant engine inference notice:', aiErr);
       }
     }
 
@@ -799,6 +1385,18 @@ Return ONLY valid JSON in this exact structure:
 
 // Mount Vite or static build
 async function startServer() {
+  console.log('[Startup] Loading persistent database records from Firestore...');
+  try {
+    await Promise.all([
+      loadVault(),
+      loadLicenses(),
+      loadVisitorSessions(),
+    ]);
+    console.log('[Startup] Persistent database records loaded successfully.');
+  } catch (initErr) {
+    console.warn('[Startup] Database preload notice:', initErr);
+  }
+
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
@@ -816,7 +1414,7 @@ async function startServer() {
 
   const port = process.env.PORT || 3000;
   app.listen(Number(port), '0.0.0.0', () => {
-    console.log(`Al-Areen Golden Den Server running on port ${port}`);
+    console.log(`Hasone Trading Server running on port ${port} with persistent Firestore`);
   });
 }
 

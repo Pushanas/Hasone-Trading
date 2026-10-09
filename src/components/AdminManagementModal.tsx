@@ -21,8 +21,12 @@ import {
   Upload,
   Database,
   HardDrive,
+  Activity,
+  Edit2,
+  Users,
 } from 'lucide-react';
 import { ModalWrapper } from './ModalWrapper';
+import { VisitorAnalyticsPanel } from './VisitorAnalyticsPanel';
 import {
   LicenseRecord,
   AdminStats,
@@ -49,7 +53,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   onClose,
   adminToken,
 }) => {
-  const [activeTab, setActiveTab] = useState<'list' | 'create' | 'backup' | 'security'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'analytics' | 'create' | 'backup' | 'security'>('list');
   const [licenses, setLicenses] = useState<LicenseRecord[]>([]);
   const [stats, setStats] = useState<AdminStats>({
     total: 0,
@@ -69,6 +73,16 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [copiedTemplate, setCopiedTemplate] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Edit Code state
+  const [editingCode, setEditingCode] = useState<LicenseRecord | null>(null);
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [editDuration, setEditDuration] = useState<number>(30);
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  // Delete Code Confirmation state
+  const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
+  const [isDeletingCode, setIsDeletingCode] = useState<boolean>(false);
 
   // Security password states
   const [newAdminPass, setNewAdminPass] = useState('');
@@ -217,7 +231,13 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
     }
   };
 
-  const handleDeleteLicense = async (code: string) => {
+  const handleDeleteLicense = (code: string) => {
+    setCodeToDelete(code);
+  };
+
+  const confirmDeleteLicense = async () => {
+    if (!codeToDelete) return;
+    setIsDeletingCode(true);
     try {
       const res = await fetch('/api/admin/delete-license', {
         method: 'POST',
@@ -225,22 +245,72 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
           'Content-Type': 'application/json',
           'x-admin-token': adminToken,
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: codeToDelete }),
       });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.success) {
-          setActionMsg({ text: 'تم حذف الكود بنجاح', type: 'success' });
+          setActionMsg({ text: 'تم حذف الكود نهائياً بنجاح', type: 'success' });
+          setCodeToDelete(null);
           fetchLicenses();
           return;
         }
       }
       throw new Error('Vercel or offline');
     } catch {
-      clientDeleteLicense(code);
+      clientDeleteLicense(codeToDelete);
       setActionMsg({ text: 'تم حذف الكود من النسخة الاحتياطية بنجاح', type: 'success' });
+      setCodeToDelete(null);
       fetchLicenses();
+    } finally {
+      setIsDeletingCode(false);
+    }
+  };
+
+  const handleStartEdit = (lic: LicenseRecord) => {
+    setEditingCode(lic);
+    setEditNotes(lic.notes || '');
+    setEditDuration(lic.durationDays || 30);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCode) return;
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch('/api/admin/update-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          code: editingCode.code,
+          notes: editNotes,
+          durationDays: editDuration,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setActionMsg({ text: 'تم تحديث بيانات الكود في قاعدة البيانات بنجاح', type: 'success' });
+          setEditingCode(null);
+          fetchLicenses();
+          return;
+        }
+      }
+      throw new Error('Vercel or offline');
+    } catch {
+      // Local fallback
+      editingCode.notes = editNotes;
+      editingCode.durationDays = editDuration;
+      saveLocalLicenses(licenses);
+      setActionMsg({ text: 'تم تحديث بيانات الكود محلياً', type: 'success' });
+      setEditingCode(null);
+      fetchLicenses();
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -430,7 +500,7 @@ ${window.location.origin}`;
         </div>
 
         {/* Tab Selector */}
-        <div className="flex items-center gap-2 mt-4 border-b border-[var(--border-subtle)] pb-2 text-xs font-bold">
+        <div className="flex flex-wrap items-center gap-2 mt-4 border-b border-[var(--border-subtle)] pb-2 text-xs font-bold">
           <button
             onClick={() => setActiveTab('list')}
             className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -440,7 +510,19 @@ ${window.location.origin}`;
             }`}
           >
             <Smartphone className="w-3.5 h-3.5" />
-            <span>قائمة الأكواد والأجهزة ({licenses.length})</span>
+            <span>إدارة الأكواد (Code Management) ({licenses.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'analytics'
+                ? 'bg-cyan-500 text-slate-950 shadow-xs'
+                : 'bg-[var(--bg-input)] text-cyan-400 hover:text-cyan-300 border border-cyan-500/30'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>تحليلات الزوار (Visitor Analytics)</span>
           </button>
 
           <button
@@ -464,7 +546,7 @@ ${window.location.origin}`;
             }`}
           >
             <HardDrive className="w-3.5 h-3.5" />
-            <span>النسخة الاحتياطية (Vercel Backup)</span>
+            <span>النسخ الاحتياطي السحابي</span>
           </button>
 
           <button
@@ -624,8 +706,8 @@ ${window.location.origin}`;
                           </div>
                         </div>
 
-                        {/* Middle Row: Hardware / IP binding telemetry */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-[var(--text-secondary)]">
+                        {/* Middle Row: Hardware / IP binding telemetry & Usage Count */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[var(--text-secondary)]">
                           <div className="flex items-center gap-1.5">
                             <Globe className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
                             <span>عنوان الـ IP:</span>
@@ -637,8 +719,8 @@ ${window.location.origin}`;
                           <div className="flex items-center gap-1.5">
                             <Smartphone className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
                             <span>الجهاز:</span>
-                            <span className="font-mono text-[10px] text-[var(--text-primary)] truncate max-w-[120px]" dir="ltr">
-                              {lic.boundDevice ? lic.boundDevice.substring(0, 16) + '...' : 'غير مربوط'}
+                            <span className="font-mono text-[10px] text-[var(--text-primary)] truncate max-w-[100px]" dir="ltr">
+                              {lic.boundDevice ? lic.boundDevice.substring(0, 14) + '...' : 'غير مربوط'}
                             </span>
                           </div>
 
@@ -647,6 +729,14 @@ ${window.location.origin}`;
                             <span>المتبقي:</span>
                             <span className="font-mono font-bold text-[var(--gold-primary)]">
                               {isBound ? `${daysRemaining} يوماً` : `${lic.durationDays} يوماً`}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                            <span>الاستخدام:</span>
+                            <span className="font-mono font-bold text-cyan-400">
+                              {lic.usageCount || 0} مرة
                             </span>
                           </div>
                         </div>
@@ -669,6 +759,15 @@ ${window.location.origin}`;
                           </button>
 
                           <div className="flex items-center gap-1 mr-auto">
+                            <button
+                              onClick={() => handleStartEdit(lic)}
+                              title="تعديل الملاحظات والمدة"
+                              className="px-2 py-1 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-cyan-400 border border-cyan-500/30 text-[10.5px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>تعديل</span>
+                            </button>
+
                             {isBound && (
                               <button
                                 onClick={() => handleResetDevice(lic.code)}
@@ -710,7 +809,12 @@ ${window.location.origin}`;
             </div>
           )}
 
-          {/* TAB 2: CREATE LICENSE CODE */}
+          {/* TAB 2: VISITOR ANALYTICS DASHBOARD */}
+          {activeTab === 'analytics' && (
+            <VisitorAnalyticsPanel adminToken={adminToken} />
+          )}
+
+          {/* TAB 3: CREATE LICENSE CODE */}
           {activeTab === 'create' && (
             <div className="card-surface p-4 sm:p-5 space-y-4">
               <div>
@@ -967,6 +1071,111 @@ ${window.location.origin}`;
             </div>
           )}
         </div>
+
+        {/* Edit Code Dialog Modal */}
+        {editingCode && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+            <div className="card-surface p-5 max-w-md w-full border-cyan-500/40 text-right space-y-4" dir="rtl">
+              <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Edit2 className="w-4 h-4 text-cyan-400" />
+                  <h4 className="text-sm font-bold text-white">تعديل بيانات كود الترخيص</h4>
+                </div>
+                <button
+                  onClick={() => setEditingCode(null)}
+                  className="p-1 rounded-lg text-[var(--text-muted)] hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)]">
+                <span className="text-[10px] text-[var(--text-muted)] block">كود الترخيص:</span>
+                <span className="font-mono font-bold text-xs text-[var(--gold-primary)] select-all" dir="ltr">
+                  {editingCode.code}
+                </span>
+              </div>
+
+              <form onSubmit={handleSaveEdit} className="space-y-3">
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] font-medium block mb-1">
+                    مدة الصلاحية (بالأيام):
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(parseInt(e.target.value) || 30)}
+                    className="w-full h-10 px-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-white font-mono outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] font-medium block mb-1">
+                    ملاحظات الكود / العميل:
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="ملاحظات توضيحية..."
+                    className="w-full p-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-white outline-none focus:border-cyan-400 resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCode(null)}
+                    className="px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-secondary)] hover:text-white cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingEdit}
+                    className="px-4 py-1.5 rounded-lg bg-cyan-500 text-slate-950 text-xs font-bold hover:brightness-110 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-40"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isSavingEdit ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Code Confirmation Dialog */}
+        {codeToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+            <div className="card-surface p-5 max-w-sm w-full border-[var(--danger)]/40 text-right space-y-3" dir="rtl">
+              <div className="w-10 h-10 rounded-xl bg-[var(--danger-soft)] text-[var(--danger)] flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-bold text-white">تأكيد حذف كود الترخيص</h4>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                هل أنت متأكد من حذف الكود <strong className="text-[var(--gold-primary)] font-mono">{codeToDelete}</strong> نهائياً من قاعدة البيانات الدائمة؟ لن يتمكن العميل من استخدامه بعد الحذف.
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                <button
+                  onClick={() => setCodeToDelete(null)}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-secondary)] hover:text-white cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={confirmDeleteLicense}
+                  disabled={isDeletingCode}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--danger)] text-white text-xs font-bold hover:brightness-110 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeletingCode ? 'جارٍ الحذف...' : 'تأكيد الحذف نهائياً'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ModalWrapper>
   );

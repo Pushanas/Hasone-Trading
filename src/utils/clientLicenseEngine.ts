@@ -11,6 +11,7 @@ export interface LicenseRecord {
   expiresAt: number | null;
   createdAt: string;
   notes: string;
+  usageCount?: number;
 }
 
 export interface AdminStats {
@@ -48,7 +49,7 @@ const SEED_LICENSES: LicenseRecord[] = [
     notes: 'كود تفعيل VIP احتياطي مقيد بهاتف و IP واحد لمدة شهر كامل',
   },
   {
-    code: 'AREEN-VIP-30D-7814-9923-GOLD',
+    code: 'HASONE-VIP-30D-7814-9923-GOLD',
     status: 'active',
     durationDays: 30,
     boundIp: null,
@@ -56,7 +57,7 @@ const SEED_LICENSES: LicenseRecord[] = [
     firstActivatedAt: null,
     expiresAt: null,
     createdAt: new Date().toISOString(),
-    notes: 'كود VIP حصري لجهاز وعنوان IP واحد فقط لمدة شهر كامل (30 يوماً من لحظة التفعيل)',
+    notes: 'كود VIP حصري لمنصة حسون - Trading مقيد بهاتف و IP واحد لمدة شهر كامل (30 يوماً)',
   },
 ];
 
@@ -86,14 +87,27 @@ export async function getClientPublicIp(): Promise<string> {
  * Loads all licenses from primary storage, auto-healing from emergency backup or seed licenses.
  */
 export function getLocalLicenses(): LicenseRecord[] {
+  const sanitize = (list: LicenseRecord[]): LicenseRecord[] => {
+    return list.map((l) => {
+      if (l.code && l.code.includes('AREEN')) {
+        return {
+          ...l,
+          code: l.code.replace(/AREEN/g, 'HASONE'),
+          notes: (l.notes || '').replace(/العرين/g, 'حسون').replace(/AREEN/g, 'HASONE'),
+        };
+      }
+      return l;
+    });
+  };
+
   try {
     const raw = localStorage.getItem(PRIMARY_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Also ensure backup mirror is kept in sync
-        localStorage.setItem(BACKUP_STORAGE_KEY, raw);
-        return parsed;
+        const cleaned = sanitize(parsed);
+        saveLocalLicenses(cleaned);
+        return cleaned;
       }
     }
   } catch {
@@ -106,8 +120,9 @@ export function getLocalLicenses(): LicenseRecord[] {
     if (backupRaw) {
       const parsedBackup = JSON.parse(backupRaw);
       if (Array.isArray(parsedBackup) && parsedBackup.length > 0) {
-        localStorage.setItem(PRIMARY_STORAGE_KEY, backupRaw);
-        return parsedBackup;
+        const cleaned = sanitize(parsedBackup);
+        saveLocalLicenses(cleaned);
+        return cleaned;
       }
     }
   } catch {
