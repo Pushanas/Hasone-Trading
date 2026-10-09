@@ -1,4 +1,5 @@
 // Unified Master Cryptographic Engine, 1-Device/IP License Engine & Server Sync for Al-Areen Al-Dahabi
+import { clientVerifyLicense } from './clientLicenseEngine';
 
 const DEFAULT_VAULT = {
   saltB64: 'uXuniMOMGKZO7q8iZONJKg==',
@@ -118,43 +119,80 @@ export async function verifyMasterPassword(
       body: JSON.stringify({ password: clean, deviceFingerprint }),
     });
 
-    const data = await res.json();
-    if (res.ok && data.success) {
-      if (data.sessionVersion) {
-        sessionStorage.setItem('areen_session_version', data.sessionVersion);
-      }
-      if (data.type === 'license_vip') {
-        localStorage.setItem(
-          'areen_active_license',
-          JSON.stringify({
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.success) {
+        if (data.sessionVersion) {
+          sessionStorage.setItem('areen_session_version', data.sessionVersion);
+        }
+        if (data.type === 'license_vip') {
+          localStorage.setItem(
+            'areen_active_license',
+            JSON.stringify({
+              code: data.licenseCode,
+              boundIp: data.boundIp,
+              expiresAt: data.expiresAt,
+              daysRemaining: data.daysRemaining,
+            })
+          );
+        }
+        return {
+          success: true,
+          sessionVersion: data.sessionVersion,
+          licenseInfo: data.type === 'license_vip' ? {
             code: data.licenseCode,
-            boundIp: data.boundIp,
-            expiresAt: data.expiresAt,
             daysRemaining: data.daysRemaining,
-          })
-        );
+            expiresAt: data.expiresAt,
+            boundIp: data.boundIp,
+          } : undefined,
+        };
+      } else {
+        return { success: false, error: data.error || 'كود التفعيل أو كلمة المرور غير صحيحة' };
       }
-      return {
-        success: true,
-        sessionVersion: data.sessionVersion,
-        licenseInfo: data.type === 'license_vip' ? {
-          code: data.licenseCode,
-          daysRemaining: data.daysRemaining,
-          expiresAt: data.expiresAt,
-          boundIp: data.boundIp,
-        } : undefined,
-      };
     } else {
-      return { success: false, error: data.error || 'كود التفعيل أو كلمة المرور غير صحيحة' };
+      // Server returned HTML or 404 (e.g., Vercel static rewrites) - seamlessly fall back to local engine!
+      throw new Error('Vercel or offline fallback needed');
     }
   } catch {
-    // 2. Offline fallback
+    // 2. Resilient Client-Side Engine fallback (Vercel & Offline)
+    // A. First check if it's a VIP single-device license code
+    const licResult = await clientVerifyLicense(clean, deviceFingerprint);
+    if (licResult.success) {
+      const fallbackVer = localStorage.getItem('areen_auth_epoch') || 'v_lic_' + Date.now();
+      sessionStorage.setItem('areen_session_version', fallbackVer);
+      localStorage.setItem(
+        'areen_active_license',
+        JSON.stringify({
+          code: licResult.licenseCode,
+          boundIp: licResult.boundIp,
+          expiresAt: licResult.expiresAt,
+          daysRemaining: licResult.daysRemaining,
+        })
+      );
+      return {
+        success: true,
+        sessionVersion: fallbackVer,
+        licenseInfo: {
+          code: licResult.licenseCode!,
+          daysRemaining: licResult.daysRemaining || 30,
+          expiresAt: licResult.expiresAt || 0,
+          boundIp: licResult.boundIp || '',
+        },
+      };
+    } else if (licResult.error && !licResult.error.includes('غير صحيح')) {
+      // Device locked or expired error specific to this code!
+      return { success: false, error: licResult.error };
+    }
+
+    // B. Check if it's the Master Password
     const ok = await localPbkdf2Verify(clean);
     if (ok) {
       const fallbackVer = localStorage.getItem('areen_auth_epoch') || 'v1';
       sessionStorage.setItem('areen_session_version', fallbackVer);
       return { success: true, sessionVersion: fallbackVer };
     }
+
     return { success: false, error: 'كود التفعيل أو كلمة المرور غير صحيحة' };
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Shield, KeyRound, AlertCircle, X } from 'lucide-react';
 import { ModalWrapper } from './ModalWrapper';
+import { clientVerifyAdminPassword } from '../utils/clientLicenseEngine';
 
 interface AdminAuthModalProps {
   isOpen: boolean;
@@ -34,16 +35,29 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: clean }),
       });
-      const data = await res.json();
 
-      if (res.ok && data.success && data.token) {
-        setPassword('');
-        onSuccess(data.token);
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && data.token) {
+          setPassword('');
+          onSuccess(data.token);
+          return;
+        } else {
+          setError(data.error || 'كلمة المرور غير صحيحة');
+          return;
+        }
       } else {
-        setError(data.error || 'كلمة المرور غير صحيحة');
+        throw new Error('Vercel or offline fallback');
       }
     } catch {
-      setError('حدث خطأ أثناء الاتصال بالخادم');
+      // Offline / Vercel static fallback
+      if (clientVerifyAdminPassword(clean)) {
+        setPassword('');
+        onSuccess('adm_local_session_' + Date.now());
+      } else {
+        setError('كلمة مرور لوحة الإدارة غير صحيحة');
+      }
     } finally {
       setLoading(false);
     }
