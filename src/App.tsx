@@ -71,9 +71,12 @@ export default function App() {
   const lastBeepSecond = useRef<number>(-1);
   const lastActivityTime = useRef<number>(Date.now());
 
-  // Handle Authentication cleanup
+  // Handle Authentication cleanup - erase all legacy pins, stale hashes, and obsolete admin tokens
   useEffect(() => {
     localStorage.removeItem('areen_custom_pin');
+    localStorage.removeItem('areen_auth_salt');
+    localStorage.removeItem('areen_auth_hash');
+    localStorage.removeItem('hasone_admin_vault_v2');
   }, []);
 
   const handleForcedKickout = (msg?: string) => {
@@ -81,9 +84,12 @@ export default function App() {
     sessionStorage.removeItem('areen_session_auth');
     sessionStorage.removeItem('areen_session_version');
     localStorage.removeItem('areen_session_auth');
+    localStorage.removeItem('areen_auth_salt');
+    localStorage.removeItem('areen_auth_hash');
+    localStorage.removeItem('hasone_admin_vault_v2');
     setSignals([]);
     setKickoutAlert(
-      msg || 'تم تحديث جلسة أمان حسون - Trading. يرجى تسجيل الدخول لمتابعة الاستخدام.'
+      msg || 'تم تحديث أمان الجلسات وحصر الدخول بكلمات المرور المعتمدة فقط. تم إنهاء الجلسة وطرد كافة الأجهزة غير المصرح لها.'
     );
   };
 

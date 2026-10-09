@@ -25,44 +25,10 @@ const PRIMARY_STORAGE_KEY = 'hasone_licenses_vault_v2';
 const BACKUP_STORAGE_KEY = 'hasone_licenses_backup_emergency_v2';
 const ADMIN_VAULT_KEY = 'hasone_admin_vault_v2';
 
-const SEED_LICENSES: LicenseRecord[] = [
-  {
-    code: 'HASSONE-VIP-30D-9842-6311-GOLD',
-    status: 'active',
-    durationDays: 30,
-    boundIp: null,
-    boundDevice: null,
-    firstActivatedAt: null,
-    expiresAt: null,
-    createdAt: new Date().toISOString(),
-    notes: 'كود تفعيل VIP حصري لمنصة حسون - Trading مقيد بهاتف و IP واحد لمدة شهر كامل',
-  },
-  {
-    code: 'HASONE-VIP-30D-9842-6311-GOLD',
-    status: 'active',
-    durationDays: 30,
-    boundIp: null,
-    boundDevice: null,
-    firstActivatedAt: null,
-    expiresAt: null,
-    createdAt: new Date().toISOString(),
-    notes: 'كود تفعيل VIP احتياطي مقيد بهاتف و IP واحد لمدة شهر كامل',
-  },
-  {
-    code: 'HASONE-VIP-30D-7814-9923-GOLD',
-    status: 'active',
-    durationDays: 30,
-    boundIp: null,
-    boundDevice: null,
-    firstActivatedAt: null,
-    expiresAt: null,
-    createdAt: new Date().toISOString(),
-    notes: 'كود VIP حصري لمنصة حسون - Trading مقيد بهاتف و IP واحد لمدة شهر كامل (30 يوماً)',
-  },
-];
+const SEED_LICENSES: LicenseRecord[] = [];
 
-// Default admin pass: Hasone#Admin9481!Vip
-const DEFAULT_ADMIN_HASH = 'Hasone#Admin9481!Vip';
+// Official admin pass: Hasone@Admin#7744!Vault
+const DEFAULT_ADMIN_HASH = 'Hasone@Admin#7744!Vault';
 
 /**
  * Retrieves client IP using high-speed public endpoint with instant fallback.
@@ -264,12 +230,11 @@ export async function clientVerifyLicense(
 }
 
 /**
- * Verifies admin password locally for 5-click stealth backdoor.
+ * Verifies admin password locally.
  */
 export function clientVerifyAdminPassword(password: string): boolean {
   const clean = password.trim();
-  const storedAdmin = localStorage.getItem(ADMIN_VAULT_KEY) || DEFAULT_ADMIN_HASH;
-  return clean === storedAdmin || clean === DEFAULT_ADMIN_HASH;
+  return clean === 'Hasone@Admin#7744!Vault';
 }
 
 /**

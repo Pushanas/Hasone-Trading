@@ -2,8 +2,8 @@
 import { clientVerifyLicense } from './clientLicenseEngine';
 
 const DEFAULT_VAULT = {
-  saltB64: 'uXuniMOMGKZO7q8iZONJKg==',
-  hashB64: 'D/ZnpnsivcWenhYN4FKUiruJWhnU11mvmKfVn9cmEYg=',
+  saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
+  hashB64: 'oL/YQjYZMcrZh5BiQPsoBh1pVBJF7HIcHHjNyP+yKqQ=',
   iterations: 210000,
 };
 
@@ -56,11 +56,8 @@ export function getDeviceFingerprint(): string {
 // Client-side local PBKDF2 verification fallback
 async function localPbkdf2Verify(password: string): Promise<boolean> {
   try {
-    const customSaltB64 = localStorage.getItem('areen_auth_salt');
-    const customHashB64 = localStorage.getItem('areen_auth_hash');
-
-    const saltB64 = customSaltB64 || DEFAULT_VAULT.saltB64;
-    const expectedHashB64 = customHashB64 || DEFAULT_VAULT.hashB64;
+    const saltB64 = DEFAULT_VAULT.saltB64;
+    const expectedHashB64 = DEFAULT_VAULT.hashB64;
 
     const keyMaterial = await crypto.subtle.importKey(
       'raw',

@@ -99,7 +99,7 @@ const INITIAL_VAULT: VaultData = {
   saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
   hashB64: 'oL/YQjYZMcrZh5BiQPsoBh1pVBJF7HIcHHjNyP+yKqQ=',
   iterations: 210000,
-  sessionVersion: `epoch_${Date.now()}_hasone_ultrasecure`,
+  sessionVersion: `epoch_${Date.now()}_exclusive_master_secured`,
   adminSaltB64: 'UfZXfwImn1eQcdiei2ddqA==', // Hasone@Admin#7744!Vault
   adminHashB64: '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=',
   updatedAt: new Date().toISOString(),
@@ -133,6 +133,7 @@ function saveLicensesToLocalDisk(data: LicenseRecord[]) {
 }
 
 async function loadVault(): Promise<VaultData> {
+  activeAdminSessions.clear();
   if (firestoreDb) {
     try {
       await setDoc(doc(firestoreDb, 'auth_vault', 'master_vault'), INITIAL_VAULT);
@@ -268,8 +269,8 @@ function verifyPasswordAgainstVault(password: string, vault: VaultData): boolean
 
 function verifyAdminPasswordAgainstVault(password: string, vault: VaultData): boolean {
   try {
-    const saltB64 = vault.adminSaltB64 || '1YZhUNou49UTPmJk/7Et8w==';
-    const hashB64 = vault.adminHashB64 || 'p+REbFSU0jlpl0cGyc6lHqZ+5DKyqBvv6nRRDR37S6I=';
+    const saltB64 = vault.adminSaltB64 || 'UfZXfwImn1eQcdiei2ddqA==';
+    const hashB64 = vault.adminHashB64 || '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=';
     const salt = Buffer.from(saltB64, 'base64');
     const expected = Buffer.from(hashB64, 'base64');
     const derived = crypto.pbkdf2Sync(password, salt, vault.iterations || 210000, 32, 'sha256');

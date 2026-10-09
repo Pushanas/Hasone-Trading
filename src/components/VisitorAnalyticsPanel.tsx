@@ -15,6 +15,7 @@ import {
   Calendar,
   CheckCircle2,
   SlidersHorizontal,
+  Key,
 } from 'lucide-react';
 
 interface VisitorSession {
@@ -58,7 +59,7 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
   const [visitors, setVisitors] = useState<VisitorSession[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'password' | 'vip'>('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalRecords, setTotalRecords] = useState<number>(0);
