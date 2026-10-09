@@ -89,45 +89,23 @@ export interface VisitorSessionRecord {
   currentPath: string;
   pageViews: number;
   status: 'active' | 'inactive';
+  isLoggedIn?: boolean;
+  loginType?: 'master' | 'license_vip' | 'none';
+  licenseCode?: string | null;
 }
 
-// Initial Default Vault configuration
+// Initial Default Vault configuration with newly updated Bot and Admin Passwords
 const INITIAL_VAULT: VaultData = {
-  saltB64: 'uXuniMOMGKZO7q8iZONJKg==',
-  hashB64: 'D/ZnpnsivcWenhYN4FKUiruJWhnU11mvmKfVn9cmEYg=',
+  saltB64: 'gXhMpC1Ww/GK4u6pZEh2dQ==', // HasoneBot2026!
+  hashB64: '+i5rz7hHXMW4kb5ctAsQINKgpQkOtpQpio1cKW9821Y=',
   iterations: 210000,
-  sessionVersion: 'epoch_1791522060000_hasone_vip',
-  adminSaltB64: '1YZhUNou49UTPmJk/7Et8w==',
-  adminHashB64: 'p+REbFSU0jlpl0cGyc6lHqZ+5DKyqBvv6nRRDR37S6I=',
+  sessionVersion: `epoch_${Date.now()}_hasone_reset_security`,
+  adminSaltB64: 'XkJsHXEd7x7XpzqclyTQHw==', // HasoneAdmin2026!
+  adminHashB64: 'jCe3dYx3fXgO0yzl5mB8h/NI/sy7qTuELGJloQnzDQA=',
   updatedAt: new Date().toISOString(),
 };
 
-const INITIAL_LICENSES: LicenseRecord[] = [
-  {
-    code: 'HASONE-VIP-30D-9842-6311-GOLD',
-    status: 'active',
-    durationDays: 30,
-    boundIp: null,
-    boundDevice: null,
-    firstActivatedAt: null,
-    expiresAt: null,
-    createdAt: new Date().toISOString(),
-    notes: 'كود VIP حصري لمنصة Hasone Trading لجهاز وعنوان IP واحد فقط لمدة 30 يوماً',
-    usageCount: 0,
-  },
-  {
-    code: 'HASONE-VIP-30D-7814-9923-GOLD',
-    status: 'active',
-    durationDays: 30,
-    boundIp: null,
-    boundDevice: null,
-    firstActivatedAt: null,
-    expiresAt: null,
-    createdAt: new Date().toISOString(),
-    notes: 'كود VIP حصري لمنصة Hasone Trading لجهاز وعنوان IP واحد فقط لمدة شهر كامل (30 يوماً من لحظة التفعيل)',
-    usageCount: 0,
-  },
-];
+const INITIAL_LICENSES: LicenseRecord[] = [];
 
 let cachedVault: VaultData = INITIAL_VAULT;
 let cachedLicenses: LicenseRecord[] = [...INITIAL_LICENSES];
@@ -135,12 +113,6 @@ const visitorSessionsMap = new Map<string, VisitorSessionRecord>();
 let retentionDays = 30;
 
 function getVaultFromLocalDisk(): VaultData {
-  try {
-    if (fs.existsSync(AUTH_FILE)) {
-      const content = fs.readFileSync(AUTH_FILE, 'utf-8');
-      return JSON.parse(content);
-    }
-  } catch {}
   return INITIAL_VAULT;
 }
 
@@ -151,25 +123,7 @@ function saveVaultToLocalDisk(data: VaultData) {
 }
 
 function getLicensesFromLocalDisk(): LicenseRecord[] {
-  try {
-    if (fs.existsSync(LICENSES_FILE)) {
-      const content = fs.readFileSync(LICENSES_FILE, 'utf-8');
-      const list = JSON.parse(content);
-      if (Array.isArray(list)) {
-        return list.map((lic) => {
-          if (lic.code && lic.code.includes('AREEN')) {
-            return {
-              ...lic,
-              code: lic.code.replace(/AREEN/g, 'HASONE'),
-              notes: (lic.notes || '').replace(/العرين/g, 'حسون').replace(/AREEN/g, 'HASONE') || 'كود تفعيل VIP حصري لمنصة Hasone Trading',
-            };
-          }
-          return lic;
-        });
-      }
-    }
-  } catch {}
-  return INITIAL_LICENSES;
+  return [];
 }
 
 function saveLicensesToLocalDisk(data: LicenseRecord[]) {
@@ -181,22 +135,16 @@ function saveLicensesToLocalDisk(data: LicenseRecord[]) {
 async function loadVault(): Promise<VaultData> {
   if (firestoreDb) {
     try {
-      const snap = await getDoc(doc(firestoreDb, 'auth_vault', 'master_vault'));
-      if (snap.exists()) {
-        cachedVault = snap.data() as VaultData;
-        saveVaultToLocalDisk(cachedVault);
-        return cachedVault;
-      } else {
-        await setDoc(doc(firestoreDb, 'auth_vault', 'master_vault'), INITIAL_VAULT);
-        cachedVault = INITIAL_VAULT;
-        saveVaultToLocalDisk(INITIAL_VAULT);
-        return cachedVault;
-      }
+      await setDoc(doc(firestoreDb, 'auth_vault', 'master_vault'), INITIAL_VAULT);
+      cachedVault = INITIAL_VAULT;
+      saveVaultToLocalDisk(INITIAL_VAULT);
+      return cachedVault;
     } catch (err) {
-      console.warn('[Firestore] Error loading vault:', err);
+      console.warn('[Firestore] Error saving vault:', err);
     }
   }
-  cachedVault = getVaultFromLocalDisk();
+  cachedVault = INITIAL_VAULT;
+  saveVaultToLocalDisk(INITIAL_VAULT);
   return cachedVault;
 }
 
@@ -216,44 +164,17 @@ async function loadLicenses(): Promise<LicenseRecord[]> {
   if (firestoreDb) {
     try {
       const snap = await getDocs(collection(firestoreDb, 'licenses'));
-      const list: LicenseRecord[] = [];
+      const deletePromises: Promise<any>[] = [];
       snap.forEach((d) => {
-        list.push(d.data() as LicenseRecord);
+        deletePromises.push(deleteDoc(doc(firestoreDb, 'licenses', d.id)).catch(() => {}));
       });
-      if (list.length > 0) {
-        // Sanitize any existing licenses that contained AREEN
-        const sanitizedList: LicenseRecord[] = [];
-        for (const lic of list) {
-          if (lic.code && lic.code.includes('AREEN')) {
-            await deleteDoc(doc(firestoreDb, 'licenses', lic.code)).catch(() => {});
-            const cleaned: LicenseRecord = {
-              ...lic,
-              code: lic.code.replace(/AREEN/g, 'HASONE'),
-              notes: (lic.notes || '').replace(/العرين/g, 'حسون').replace(/AREEN/g, 'HASONE') || 'كود تفعيل VIP حصري لمنصة Hasone Trading',
-            };
-            await setDoc(doc(firestoreDb, 'licenses', cleaned.code), cleaned).catch(() => {});
-            sanitizedList.push(cleaned);
-          } else {
-            sanitizedList.push(lic);
-          }
-        }
-        cachedLicenses = sanitizedList;
-        saveLicensesToLocalDisk(sanitizedList);
-        return sanitizedList;
-      } else {
-        // Seed initial licenses into Firestore
-        for (const lic of INITIAL_LICENSES) {
-          await setDoc(doc(firestoreDb, 'licenses', lic.code), lic);
-        }
-        cachedLicenses = [...INITIAL_LICENSES];
-        saveLicensesToLocalDisk(INITIAL_LICENSES);
-        return cachedLicenses;
-      }
+      await Promise.all(deletePromises);
     } catch (err) {
-      console.warn('[Firestore] Error loading licenses:', err);
+      console.warn('[Firestore] Error clearing licenses:', err);
     }
   }
-  cachedLicenses = getLicensesFromLocalDisk();
+  cachedLicenses = [];
+  saveLicensesToLocalDisk([]);
   return cachedLicenses;
 }
 
@@ -439,10 +360,30 @@ function parseUserAgentDetails(uaString?: string) {
   return { deviceCategory, os, browser };
 }
 
+async function markSessionLoggedIn(clientSid: string | undefined, ip: string, loginType: 'master' | 'license_vip', licenseCode?: string | null) {
+  let session = clientSid && typeof clientSid === 'string' ? visitorSessionsMap.get(clientSid) : null;
+  if (!session) {
+    for (const s of visitorSessionsMap.values()) {
+      if (s.ip === ip) {
+        if (!session || s.lastActivity > session.lastActivity) {
+          session = s;
+        }
+      }
+    }
+  }
+  if (session) {
+    session.isLoggedIn = true;
+    session.loginType = loginType;
+    session.licenseCode = licenseCode || null;
+    session.lastActivity = Date.now();
+    await persistVisitorSession(session);
+  }
+}
+
 // API Routes
 // 1. Unified Authentication endpoint (supports both Master Password and 1-Month 1-IP/Device License Code)
 app.post('/api/auth/login', async (req: Request, res: Response) => {
-  const { password, code, deviceFingerprint } = req.body;
+  const { password, code, deviceFingerprint, sessionId } = req.body;
   const ip = getObservedPublicIp(req);
   const now = Date.now();
 
@@ -493,6 +434,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
       await persistLicense(lic);
       failedAttemptsMap.delete(ip);
+      await markSessionLoggedIn(sessionId, ip, 'license_vip', lic.code);
 
       const daysRemaining = lic.durationDays || 30;
       return res.json({
@@ -533,6 +475,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     await persistLicense(lic);
 
     failedAttemptsMap.delete(ip);
+    await markSessionLoggedIn(sessionId, ip, 'license_vip', lic.code);
     const daysRemaining = Math.max(1, Math.ceil(((lic.expiresAt || now) - now) / (24 * 60 * 60 * 1000)));
 
     return res.json({
@@ -551,6 +494,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
   if (isMasterValid) {
     failedAttemptsMap.delete(ip);
+    await markSessionLoggedIn(sessionId, ip, 'master', null);
     return res.json({
       success: true,
       type: 'master',
@@ -1032,6 +976,10 @@ app.get('/api/admin/analytics/visitors', (req: Request, res: Response) => {
     list = list.filter((s) => s.status === 'active');
   } else if (statusFilter === 'inactive') {
     list = list.filter((s) => s.status === 'inactive');
+  } else if (statusFilter === 'password') {
+    list = list.filter((s) => s.isLoggedIn && s.loginType === 'master');
+  } else if (statusFilter === 'vip') {
+    list = list.filter((s) => s.isLoggedIn && s.loginType === 'license_vip');
   }
 
   // Sort by last activity descending (most recent first)

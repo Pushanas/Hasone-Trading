@@ -29,6 +29,9 @@ interface VisitorSession {
   pageViews: number;
   status: 'active' | 'inactive';
   isOnline: boolean;
+  isLoggedIn?: boolean;
+  loginType?: 'master' | 'license_vip' | 'none';
+  licenseCode?: string | null;
 }
 
 interface AnalyticsSummary {
@@ -399,7 +402,7 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
         </div>
 
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-xl border border-[var(--border-subtle)]">
+        <div className="flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-xl border border-[var(--border-subtle)] flex-wrap">
           <button
             onClick={() => {
               setStatusFilter('all');
@@ -426,6 +429,32 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>نشط الآن</span>
+          </button>
+          <button
+            onClick={() => {
+              setStatusFilter('password');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              statusFilter === 'password'
+                ? 'bg-[var(--gold-primary)] text-[var(--text-on-gold)] shadow-xs'
+                : 'text-[var(--text-secondary)] hover:text-white'
+            }`}
+          >
+            بكلمة المرور
+          </button>
+          <button
+            onClick={() => {
+              setStatusFilter('vip');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              statusFilter === 'vip'
+                ? 'bg-[var(--gold-primary)] text-[var(--text-on-gold)] shadow-xs'
+                : 'text-[var(--text-secondary)] hover:text-white'
+            }`}
+          >
+            بكود VIP
           </button>
           <button
             onClick={() => {
@@ -463,6 +492,7 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[11px] text-[var(--text-secondary)] font-bold">
                 <th className="p-3 whitespace-nowrap">عنوان IP العام (المرصود)</th>
                 <th className="p-3 whitespace-nowrap">الحالة اللحظية</th>
+                <th className="p-3 whitespace-nowrap">حالة التسجيل</th>
                 <th className="p-3 whitespace-nowrap">الجهاز والمواصفات</th>
                 <th className="p-3 whitespace-nowrap">المسار الحالي</th>
                 <th className="p-3 whitespace-nowrap text-center">المشاهدات</th>
@@ -474,14 +504,14 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {loading && visitors.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={9} className="p-8 text-center text-[var(--text-muted)]">
                     <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--gold-primary)]" />
                     جارٍ تحميل سجلات وتحليلات الزوار...
                   </td>
                 </tr>
               ) : visitors.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={9} className="p-8 text-center text-[var(--text-muted)]">
                     لا توجد سجلات زوار تطابق معايير البحث الحالية.
                   </td>
                 </tr>
@@ -513,6 +543,27 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
                           <Clock className="w-3 h-3 text-slate-400" />
                           غير نشط
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Login / Auth status */}
+                    <td className="p-3 whitespace-nowrap">
+                      {visitor.isLoggedIn ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--gold-primary)]/15 border border-[var(--gold-primary)]/30 text-[var(--gold-primary)]">
+                            <Key className="w-3 h-3" />
+                            {visitor.loginType === 'master' ? 'مسجل بكلمة المرور' : 'مسجل بكود VIP'}
+                          </span>
+                          {visitor.licenseCode && (
+                            <span className="text-[9px] font-mono text-[var(--text-muted)] truncate max-w-[140px]" title={visitor.licenseCode}>
+                              {visitor.licenseCode}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-[var(--text-muted)] bg-[var(--bg-input)] border border-[var(--border-subtle)]">
+                          زائر عام
                         </span>
                       )}
                     </td>

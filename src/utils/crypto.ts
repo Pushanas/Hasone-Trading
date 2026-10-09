@@ -111,12 +111,14 @@ export async function verifyMasterPassword(
 
   const deviceFingerprint = getDeviceFingerprint();
 
+  const sessionId = sessionStorage.getItem('hasone_visitor_sid') || localStorage.getItem('hasone_visitor_sid') || '';
+
   // 1. Try server endpoint
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: clean, deviceFingerprint }),
+      body: JSON.stringify({ password: clean, deviceFingerprint, sessionId }),
     });
 
     const contentType = res.headers.get('content-type') || '';
