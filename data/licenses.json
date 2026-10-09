@@ -1,0 +1,24 @@
+[
+  {
+    "code": "HASONE-VIP-30D-9842-6311-GOLD",
+    "status": "active",
+    "durationDays": 30,
+    "boundIp": null,
+    "boundDevice": null,
+    "firstActivatedAt": null,
+    "expiresAt": null,
+    "createdAt": "2026-10-08T21:59:00.000Z",
+    "notes": "كود تفعيل VIP حصري لمنصة Hasone Trading"
+  },
+  {
+    "code": "AREEN-VIP-30D-7814-9923-GOLD",
+    "status": "active",
+    "durationDays": 30,
+    "boundIp": null,
+    "boundDevice": null,
+    "firstActivatedAt": null,
+    "expiresAt": null,
+    "createdAt": "2026-10-06T18:11:00.000Z",
+    "notes": "كود VIP حصري لجهاز وعنوان IP واحد فقط لمدة شهر كامل (30 يوماً من لحظة التفعيل)"
+  }
+]

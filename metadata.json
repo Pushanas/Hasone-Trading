@@ -1,0 +1,6 @@
+{
+  "name": "بوت العرين الذهبي — منظومة الإشارات والصفقات الزمنية",
+  "description": "منصة وبوت العرين الذهبي لإدارة وتوليد الصفقات الزمنية الاحترافية لأسواق الـ OTC والفوركس بدقة متناهية وحماية متطورة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
