@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Lock, Clock, Shield } from 'lucide-react';
-import emblemImage from '../assets/images/hassone_trading_logo_1791569318604.jpg';
+import emblemImage from '../assets/images/hassone_trading_modern_logo_1791570141710.jpg';
 
 interface HeaderProps {
   onLockSession: () => void;
@@ -55,10 +55,10 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={handleLogoClick}
             className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl shrink-0 group cursor-default select-none"
           >
-            {/* Subtle Metallic Ambient Backlight Glow */}
-            <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-br from-[var(--gold-primary)]/30 via-[var(--accent-burgundy)]/25 to-transparent blur-[3px] opacity-90 transition-opacity" />
+            {/* Subtle Optimistic Cyan & Emerald Ambient Backlight Glow */}
+            <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-br from-emerald-500/40 via-cyan-500/35 to-violet-500/25 blur-[3px] opacity-90 transition-opacity" />
 
-            <div className="relative w-full h-full rounded-xl overflow-hidden border border-[var(--gold-border)] p-0.5 bg-[var(--bg-surface)] shadow-lg ring-1 ring-white/10">
+            <div className="relative w-full h-full rounded-xl overflow-hidden border border-cyan-500/40 p-0.5 bg-[var(--bg-surface)] shadow-lg ring-1 ring-emerald-500/20">
               <img
                 src={emblemImage}
                 alt="حسون - Trading"
@@ -75,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
               حسون - Trading
             </h1>
             <span
-              className="text-[8px] sm:text-[9px] font-bold tracking-[0.16em] text-[var(--gold-primary)] uppercase block mt-1 font-mono leading-none whitespace-nowrap"
+              className="text-[8px] sm:text-[9px] font-bold tracking-[0.16em] text-cyan-400 uppercase block mt-1 font-mono leading-none whitespace-nowrap"
               dir="ltr"
             >
               HASSONE TRADING VIP

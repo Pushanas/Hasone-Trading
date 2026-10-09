@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowUpRight, ArrowDownRight, Clock, SlidersHorizontal } from 'lucide-react';
 import { SignalItem, SignalResult } from '../types';
 import { standardizePairName } from '../utils/formatter';
-import emblemImage from '../assets/images/hassone_trading_logo_1791569318604.jpg';
+import emblemImage from '../assets/images/hassone_trading_modern_logo_1791570141710.jpg';
 
 interface ActiveSignalCardProps {
   currentSignal: SignalItem | null;
@@ -31,8 +31,8 @@ export const ActiveSignalCard: React.FC<ActiveSignalCardProps> = ({
       <div className="card-surface p-5 sm:p-7 text-center space-y-4 relative overflow-hidden" dir="rtl">
         {/* Emblem Presentation */}
         <div className="relative mx-auto w-fit">
-          <div className="absolute inset-0 rounded-2xl bg-[var(--gold-primary)]/15 blur-lg -z-10 scale-110" />
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-[var(--gold-border)] bg-[var(--bg-canvas)] shadow-xl ring-1 ring-[var(--gold-primary)]/40 transition-transform duration-300 hover:scale-105">
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-emerald-500/25 to-cyan-500/25 blur-lg -z-10 scale-110" />
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-cyan-500/40 bg-[var(--bg-canvas)] shadow-xl ring-1 ring-emerald-500/30 transition-transform duration-300 hover:scale-105">
             <img
               src={emblemImage}
               alt="حسون - Trading"
@@ -47,7 +47,7 @@ export const ActiveSignalCard: React.FC<ActiveSignalCardProps> = ({
           <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] tracking-wide">
             حسون - Trading
           </h2>
-          <p className="text-[10px] sm:text-[11px] font-bold text-[var(--gold-primary)] tracking-widest font-mono uppercase" dir="ltr">
+          <p className="text-[10px] sm:text-[11px] font-bold text-cyan-400 tracking-widest font-mono uppercase" dir="ltr">
             VIP ALGORITHMIC PLATFORM
           </p>
         </div>

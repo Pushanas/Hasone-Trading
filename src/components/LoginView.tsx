@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Lock, Sparkles, KeyRound, AlertCircle } from 'lucide-react';
 import { verifyMasterPassword } from '../utils/crypto';
-import emblemImage from '../assets/images/hassone_trading_logo_1791569318604.jpg';
+import emblemImage from '../assets/images/hassone_trading_modern_logo_1791570141710.jpg';
 
 interface LoginViewProps {
   onSuccess: () => void;
@@ -106,10 +106,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
             onClick={handleLogoClick}
             className="relative mb-3.5 cursor-default select-none"
           >
-            {/* Subtle Golden Glow behind Logo */}
-            <div className="absolute inset-0 rounded-3xl bg-[var(--gold-primary)]/15 blur-xl -z-10 scale-110" />
+            {/* Optimistic Cyan & Emerald Glow behind Logo */}
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-emerald-500/25 to-cyan-500/25 blur-xl -z-10 scale-110" />
             
-            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden border border-[var(--gold-border)] shadow-2xl bg-[var(--bg-canvas)] ring-1 ring-[var(--gold-primary)]/40">
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden border border-cyan-500/40 shadow-2xl bg-[var(--bg-canvas)] ring-1 ring-emerald-500/30">
               <img
                 src={emblemImage}
                 alt="حسون - Trading"
@@ -122,7 +122,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <h1 className="text-2xl font-black tracking-tight text-[var(--text-primary)]">
             حسون - Trading
           </h1>
-          <p className="text-[10px] sm:text-[11px] text-[var(--gold-primary)] tracking-widest mt-1 font-bold uppercase font-mono">
+          <p className="text-[10px] sm:text-[11px] text-cyan-400 tracking-widest mt-1 font-bold uppercase font-mono">
             HASSONE TRADING ▪ VIP SYSTEMS
           </p>
         </div>

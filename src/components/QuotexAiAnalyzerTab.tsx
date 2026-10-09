@@ -12,7 +12,7 @@ import {
   Layers,
   Activity,
 } from 'lucide-react';
-import emblemImage from '../assets/images/hassone_trading_logo_1791569318604.jpg';
+import emblemImage from '../assets/images/hassone_trading_modern_logo_1791570141710.jpg';
 import { QUOTEX_OTC_PAIRS } from '../constants/quotexPairs';
 import {
   QuotexAnalysisResult,
@@ -180,7 +180,7 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="relative w-12 h-12 rounded-2xl overflow-hidden border border-[var(--gold-border)] p-0.5 bg-[var(--bg-surface)] shadow-lg ring-1 ring-white/10 shrink-0 group">
+            <div className="relative w-12 h-12 rounded-2xl overflow-hidden border border-cyan-500/40 p-0.5 bg-[var(--bg-surface)] shadow-lg ring-1 ring-emerald-500/20 shrink-0 group">
               <img
                 src={emblemImage}
                 alt="حسون - Trading"
