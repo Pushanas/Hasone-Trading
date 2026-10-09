@@ -403,6 +403,14 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' });
   }
 
+  // Explicit ban on deprecated legacy password
+  if (inputSecret.toLowerCase() === 'hasone#2026!vip' || inputSecret === 'Hasone#2026!Vip') {
+    return res.status(403).json({
+      success: false,
+      error: '⚠️ تم إلغاء وحظر كلمة المرور هذه (Hasone#2026!Vip) نهائياً من قِبل إدارة حسون Trading ولا يمكن استخدامها مطلقا.',
+    });
+  }
+
   const vault = cachedVault;
   const licenses = cachedLicenses;
 
@@ -599,9 +607,15 @@ app.post('/api/auth/change-password', async (req: Request, res: Response) => {
 // 1. Admin Login Verification
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const { password } = req.body;
+  const clean = String(password || '').trim();
+
+  if (clean.toLowerCase() === 'hasone#2026!vip' || clean === 'Hasone#2026!Vip') {
+    return res.status(403).json({ success: false, error: '⚠️ تم إلغاء وحظر كلمة المرور هذه نهائياً.' });
+  }
+
   const vault = cachedVault;
 
-  if (!password || !verifyAdminPasswordAgainstVault(String(password).trim(), vault)) {
+  if (!clean || !verifyAdminPasswordAgainstVault(clean, vault)) {
     return res.status(401).json({ success: false, error: 'كلمة مرور لوحة الإدارة غير صحيحة' });
   }
 

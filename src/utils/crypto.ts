@@ -106,6 +106,13 @@ export async function verifyMasterPassword(
     return { success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' };
   }
 
+  if (clean.toLowerCase() === 'hasone#2026!vip' || clean === 'Hasone#2026!Vip') {
+    return {
+      success: false,
+      error: '⚠️ تم إلغاء وحظر كلمة المرور هذه (Hasone#2026!Vip) نهائياً من قِبل إدارة حسون Trading ولا يمكن استخدامها.',
+    };
+  }
+
   const deviceFingerprint = getDeviceFingerprint();
 
   const sessionId = sessionStorage.getItem('hasone_visitor_sid') || localStorage.getItem('hasone_visitor_sid') || '';
