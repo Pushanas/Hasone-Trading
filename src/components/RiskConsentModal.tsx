@@ -21,7 +21,7 @@ export const RiskConsentModal: React.FC<RiskConsentModalProps> = ({ isOpen, onAc
               إقرار وضوابط الاستخدام التقني
             </h2>
             <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
-              منصة Hasone Trading للبرمجيات • اتفاقية البروتوكول التشغيلي
+              منصة حسون - Trading للبرمجيات • اتفاقية البروتوكول التشغيلي
             </p>
           </div>
         </div>

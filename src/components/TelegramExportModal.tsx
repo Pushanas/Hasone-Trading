@@ -32,7 +32,7 @@ export const TelegramExportModal: React.FC<TelegramExportModalProps> = ({
           timeframe: firstTf,
           martingale,
           utcOffset: '+03:00',
-          strategyName: 'استراتيجية Hasone Breakout (Golden Trend & Volume)',
+          strategyName: 'استراتيجية حسون Breakout (Golden Trend & Volume)',
         }
       );
     }
@@ -42,7 +42,7 @@ export const TelegramExportModal: React.FC<TelegramExportModalProps> = ({
     }
 
     if (style === 'standard') {
-      const header = `⧉ HASONE TRADING SIGNALS (${signals.length} TRADES - ${firstTf})\n`;
+      const header = `⧉ HASSONE TRADING SIGNALS (${signals.length} TRADES - ${firstTf})\n`;
       const body = signals
         .map((s) => {
           const pairClean = s.pair.replace('/', '').replace(' OTC', '').replace('-OTC', '');
@@ -91,7 +91,7 @@ export const TelegramExportModal: React.FC<TelegramExportModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-black text-[var(--text-primary)]">
-                تصدير صفقات Hasone Trading
+                تصدير صفقات حسون - Trading
               </h3>
               <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
                 صيغ مزخرفة جاهزة للنشر الفوري في قنوات التيليجرام
@@ -120,7 +120,7 @@ export const TelegramExportModal: React.FC<TelegramExportModalProps> = ({
                 : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
             }`}
           >
-            👑 مزخرف 𝚄𝚃𝙲 Hasone
+            👑 مزخرف 𝚄𝚃𝙲 حسون
           </button>
           <button
             type="button"

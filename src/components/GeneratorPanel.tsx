@@ -79,7 +79,7 @@ export const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
 
         <div className="text-right flex-1 px-3">
           <h2 className="text-sm sm:text-base font-black text-[var(--text-primary)] tracking-tight flex items-center justify-end gap-1.5">
-            <span>مولّد صفقات Hasone Trading</span>
+            <span>مولّد صفقات حسون - Trading</span>
           </h2>
           <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
             توليد صفقات زمنية دقيقة لأسواق الـ OTC
@@ -308,7 +308,7 @@ export const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
           className="btn-primary w-full py-3.5 px-4 text-sm"
         >
           <Zap className="w-4 h-4 text-[var(--text-on-burgundy)] fill-current" />
-          <span>إنشاء وتحديث جدول صفقات Hasone Trading ({config.timeframe})</span>
+          <span>إنشاء وتحديث جدول صفقات حسون - Trading ({config.timeframe})</span>
           <Zap className="w-4 h-4 text-[var(--text-on-burgundy)] fill-current" />
         </button>
       </div>

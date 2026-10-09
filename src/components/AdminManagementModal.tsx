@@ -255,7 +255,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   };
 
   const handleCopyClientDelivery = async (code: string, days: number) => {
-    const deliveryText = `👑 كود تفعيل اشتراكك الحصري في منصة Hasone Trading VIP 👑
+    const deliveryText = `👑 كود تفعيل اشتراكك الحصري في منصة حسون - Trading VIP 👑
 
 🔑 كود التفعيل:
 ${code}
@@ -306,7 +306,7 @@ ${window.location.origin}`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `hasone-trading-licenses-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `hassone-trading-licenses-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -374,7 +374,7 @@ ${window.location.origin}`;
                 لوحة إدارة التراخيص والأكواد VIP
               </h2>
               <p className="text-[10px] sm:text-xs text-[var(--text-secondary)] mt-0.5 font-mono">
-                HASONE TRADING ▪ SINGLE-DEVICE IP ACCESS MANAGEMENT
+                HASSONE TRADING ▪ SINGLE-DEVICE IP ACCESS MANAGEMENT
               </p>
             </div>
           </div>

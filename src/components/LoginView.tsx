@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Lock, Sparkles, KeyRound, AlertCircle } from 'lucide-react';
 import { verifyMasterPassword } from '../utils/crypto';
-import emblemImage from '../assets/images/hasone_clear_logo_1791521412888.jpg';
+import emblemImage from '../assets/images/hassone_trading_logo_1791569318604.jpg';
 
 interface LoginViewProps {
   onSuccess: () => void;
@@ -61,7 +61,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     if (secondsRemaining > 0) return;
     const cleanPass = password.trim();
     if (!cleanPass) {
-      setError('يرجى إدخال كلمة المرور للوصول إلى منصة Hasone Trading');
+      setError('يرجى إدخال كلمة المرور للوصول إلى منصة حسون - Trading');
       return;
     }
 
@@ -82,7 +82,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           const step = Math.min(nextFailed - MAX_ATTEMPTS, LOCK_STEPS.length - 1);
           const penalty = LOCK_STEPS[step];
           setLockedUntil(Date.now() + penalty * 1000);
-          setError(`تم تفعيل القفل الأمني المشدد لمنصة Hasone Trading لمدة ${penalty} ثانية بسبب تكرار المحاولات الخاطئة.`);
+          setError(`تم تفعيل القفل الأمني المشدد لمنصة حسون - Trading لمدة ${penalty} ثانية بسبب تكرار المحاولات الخاطئة.`);
         } else {
           setError(result.error || `كلمة المرور غير صحيحة. متبقي لديك ${MAX_ATTEMPTS - nextFailed} محاولات.`);
         }
@@ -112,7 +112,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden border border-[var(--gold-border)] shadow-2xl bg-[var(--bg-canvas)] ring-1 ring-[var(--gold-primary)]/40">
               <img
                 src={emblemImage}
-                alt="Hasone Trading"
+                alt="حسون - Trading"
                 className="w-full h-full object-cover rounded-3xl"
                 referrerPolicy="no-referrer"
               />
@@ -120,10 +120,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
 
           <h1 className="text-2xl font-black tracking-tight text-[var(--text-primary)]">
-            Hasone Trading
+            حسون - Trading
           </h1>
           <p className="text-[10px] sm:text-[11px] text-[var(--gold-primary)] tracking-widest mt-1 font-bold uppercase font-mono">
-            HASONE TRADING ▪ VIP SYSTEMS
+            HASSONE TRADING ▪ VIP SYSTEMS
           </p>
         </div>
 
@@ -148,7 +148,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 disabled={loading || secondsRemaining > 0}
-                placeholder="HASONE-VIP-... أو كلمة المرور"
+                placeholder="HASSONE-VIP-... أو كلمة المرور"
                 className="w-full h-12 pr-10 pl-10 rounded-2xl bg-[var(--bg-input)] border-2 border-[var(--border-default)] text-[var(--text-primary)] text-sm font-mono focus:border-[var(--accent-tech)] focus:ring-1 focus:ring-[var(--accent-tech)] outline-none transition-all placeholder:text-[var(--text-muted)] text-center disabled:opacity-50"
                 autoFocus
               />
@@ -193,7 +193,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               className="btn-primary w-full h-12 text-sm text-[var(--text-on-burgundy)] shadow-md disabled:opacity-50"
             >
               <Lock className="w-4 h-4 text-[var(--text-on-burgundy)]" />
-              <span>{loading ? 'جاري الدخول...' : 'دخول منصة Hasone Trading VIP'}</span>
+              <span>{loading ? 'جاري الدخول...' : 'دخول منصة حسون - Trading VIP'}</span>
             </button>
           </div>
         </div>

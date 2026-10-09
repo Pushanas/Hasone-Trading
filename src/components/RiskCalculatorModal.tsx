@@ -35,7 +35,7 @@ export const RiskCalculatorModal: React.FC<RiskCalculatorModalProps> = ({ isOpen
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-black text-[var(--gold-primary)]">
-                حاسبة إدارة رأس المال — Hasone Trading
+                حاسبة إدارة رأس المال — حسون - Trading
               </h3>
               <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
                 حساب دقيق لمبالغ الدخول والمضاعفات لحماية حسابك
@@ -115,7 +115,7 @@ export const RiskCalculatorModal: React.FC<RiskCalculatorModalProps> = ({ isOpen
         {/* Calculation Results Card */}
         <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-[var(--bg-input)] border border-[var(--border-subtle)] space-y-3">
           <div className="text-xs font-bold text-[var(--gold-primary)] border-b border-[var(--border-subtle)] pb-2 flex items-center justify-between">
-            <span>مبالغ الدخول المحسوبة لصفقات Hasone Trading:</span>
+            <span>مبالغ الدخول المحسوبة لصفقات حسون - Trading:</span>
             <span className="font-mono text-[var(--text-primary)]">${balance}</span>
           </div>
 

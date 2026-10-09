@@ -39,7 +39,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({ isOpen, onClose 
     if (!result.success) {
       setMsg({ text: result.error || 'فشل تحديث كلمة المرور', type: 'error' });
     } else {
-      setMsg({ text: 'تم تشفير وتحديث كلمة مرور Hasone Trading بنجاح!', type: 'success' });
+      setMsg({ text: 'تم تشفير وتحديث كلمة مرور حسون - Trading بنجاح!', type: 'success' });
       setCurrentPin('');
       setNewPin('');
       setConfirmPin('');
@@ -60,7 +60,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({ isOpen, onClose 
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-black text-[var(--gold-primary)]">
-                تغيير رمز أمان Hasone Trading
+                تغيير رمز أمان حسون - Trading
               </h3>
               <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
                 تحديث التشفير الرقمي والتحكم بالأجهزة
@@ -89,7 +89,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({ isOpen, onClose 
             </label>
             <input
               type="password"
-              placeholder="أدخل كلمة المرور الحالية لمنصة Hasone Trading..."
+              placeholder="أدخل كلمة المرور الحالية لمنصة حسون - Trading..."
               value={currentPin}
               onChange={(e) => setCurrentPin(e.target.value)}
               disabled={loading}

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Zap, SlidersHorizontal, Flame, ListFilter, Calculator } from 'lucide-react';
+import { Zap, SlidersHorizontal, Flame, ListFilter, Calculator, Sparkles } from 'lucide-react';
 
-export type NavTabType = 'live' | 'generator' | 'collection' | 'table' | 'calculator';
+export type NavTabType = 'live' | 'generator' | 'analyzer' | 'collection' | 'table' | 'calculator';
 
 interface MagicNavigationBarProps {
   activeTab: NavTabType;
@@ -40,15 +40,26 @@ export const MagicNavigationBar: React.FC<MagicNavigationBarProps> = ({
           <span className="nav-label">المولّد</span>
         </button>
 
-        {/* Center Floating Button (.profile): Strategy (استراتيجيات Hasone Trading) */}
+        {/* Tab 3: Quotex AI Analyzer (بوت كوتكس) */}
+        <button
+          type="button"
+          onClick={() => onChangeTab('analyzer')}
+          className={`nav-item ${activeTab === 'analyzer' ? 'active' : ''}`}
+          aria-label="محلل كوتكس"
+        >
+          <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+          <span className="nav-label">محلل كوتكس</span>
+        </button>
+
+        {/* Center Floating Button (.profile): Strategy (استراتيجيات حسون - Trading) */}
         <button
           type="button"
           onClick={() => onChangeTab('collection')}
           className={`profile ${activeTab === 'collection' ? 'active' : ''}`}
-          aria-label="استراتيجيات Hasone Trading"
+          aria-label="استراتيجيات حسون - Trading"
         >
           <Flame className="w-7 h-7 sm:w-8 sm:h-8 fill-current stroke-[2.5]" />
-          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-tight mt-0.5">Hasone</span>
+          <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-tight mt-0.5">حسون</span>
         </button>
 
         {/* Tab 4: Table (الجدول) */}

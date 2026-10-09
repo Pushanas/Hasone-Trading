@@ -213,7 +213,7 @@ export async function updateMasterPassword(
   if (weakPatterns.includes(cleanNew.toLowerCase()) || cleanNew.length < 6) {
     return {
       success: false,
-      error: 'كلمة المرور سهلة الاختراق أو أقل من 6 خانات! اختر كلمة مرور قوية لحماية حسابك في Hasone Trading.',
+      error: 'كلمة المرور سهلة الاختراق أو أقل من 6 خانات! اختر كلمة مرور قوية لحماية حسابك في حسون - Trading.',
     };
   }
 

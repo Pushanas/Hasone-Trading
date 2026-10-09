@@ -115,11 +115,11 @@ export function formatAreenDecoratedTelegram(
 
   const timeframe = options?.timeframe || 'M1';
   const martingale = options?.martingale || 'NON MTG';
-  const strategyName = options?.strategyName || 'استراتيجية Hasone Breakout';
+  const strategyName = options?.strategyName || 'استراتيجية حسون Breakout';
   const utcLine = formatUtcHeaderMono(options?.utcOffset || '+03:00');
   const tfText = timeframe === 'M5' ? '5 دقائق (M5)' : 'دقيقة واحدة (M1)';
 
-  const header = `👑 صفقات Hasone Trading VIP 👑
+  const header = `👑 صفقات حسون - Trading VIP 👑
 ${utcLine}
 ━━━━━━━━━━━━━━━━━━━━`;
 
@@ -133,7 +133,7 @@ ${utcLine}
 ⏱️ مدة الشمعة: ${tfText}
 🛡️ نظام المضاعفة: ${martingale}
 📊 الاستراتيجية: ${strategyName}
-🏢 بوت Hasone Trading VIP`;
+🏢 بوت حسون - Trading VIP`;
 
   return `${header}\n${rows}\n${footer}`;
 }

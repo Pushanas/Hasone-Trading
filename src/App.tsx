@@ -7,6 +7,7 @@ import { AreenCollectionTab } from './components/AreenCollectionTab';
 import { ActiveSignalCard } from './components/ActiveSignalCard';
 import { SignalsTable } from './components/SignalsTable';
 import { RiskCalculatorView } from './components/RiskCalculatorView';
+import { QuotexAiAnalyzerTab } from './components/QuotexAiAnalyzerTab';
 import { TelegramExportModal } from './components/TelegramExportModal';
 import { ChangePinModal } from './components/ChangePinModal';
 import { AdminAuthModal } from './components/AdminAuthModal';
@@ -14,7 +15,6 @@ import { AdminManagementModal } from './components/AdminManagementModal';
 import { MagicNavigationBar, NavTabType } from './components/MagicNavigationBar';
 import { DEFAULT_PAIRS } from './constants/pairs';
 import { GeneratorConfig, SignalItem, SignalResult } from './types';
-import { playCountdownBeep, playEntryFanfare } from './utils/audio';
 import { checkSessionValidity } from './utils/crypto';
 import { formatSingleSignalMono } from './utils/formatter';
 
@@ -27,12 +27,8 @@ export default function App() {
 
   const [kickoutAlert, setKickoutAlert] = useState<string | null>(null);
 
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('areen_sound_enabled') !== 'false';
-  });
-
-  // Navigation Tabs: 'live' | 'generator' | 'collection' | 'table' | 'calculator'
-  const [activeTab, setActiveTab] = useState<'live' | 'generator' | 'collection' | 'table' | 'calculator'>('live');
+  // Navigation Tabs: NavTabType ('live' | 'generator' | 'analyzer' | 'collection' | 'table' | 'calculator')
+  const [activeTab, setActiveTab] = useState<NavTabType>('live');
 
   const [availablePairs, setAvailablePairs] = useState<string[]>(() => {
     const saved = localStorage.getItem('areen_custom_pairs');
@@ -75,7 +71,7 @@ export default function App() {
     localStorage.removeItem('areen_session_auth');
     setSignals([]);
     setKickoutAlert(
-      msg || 'تم تحديث جلسة أمان Hasone Trading. يرجى تسجيل الدخول لمتابعة الاستخدام.'
+      msg || 'تم تحديث جلسة أمان حسون - Trading. يرجى تسجيل الدخول لمتابعة الاستخدام.'
     );
   };
 
@@ -136,12 +132,6 @@ export default function App() {
     };
   }, [isAuthenticated]);
 
-  const toggleSound = () => {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    localStorage.setItem('areen_sound_enabled', String(next));
-  };
-
   // Inactivity guard
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -189,6 +179,34 @@ export default function App() {
       return;
     }
     setSignals(importedSignals);
+    setActiveTab('live');
+  };
+
+  // Import single Quotex AI signal into live tracker
+  const handleImportQuotexSignal = (s: {
+    pair: string;
+    timeStr: string;
+    direction: 'CALL' | 'PUT';
+    timeframe: string;
+  }) => {
+    const [hours, minutes] = s.timeStr.split(':').map(Number);
+    const now = new Date();
+    const tradeTime = new Date(now);
+    tradeTime.setHours(hours, minutes, 0, 0);
+
+    const newSignal: SignalItem = {
+      id: `quotex_${Date.now()}`,
+      pair: s.pair,
+      time: tradeTime,
+      timeStr: s.timeStr,
+      direction: s.direction,
+      timeframe: (s.timeframe as any) || 'M1',
+      martingale: 'NON MTG',
+      done: false,
+      result: 'pending',
+    };
+
+    setSignals((prev) => [newSignal, ...prev]);
     setActiveTab('live');
   };
 
@@ -288,26 +306,16 @@ export default function App() {
         const mins = Math.floor(totalSec / 60);
         const secs = totalSec % 60;
         setCountdownText(`${pad(mins)}:${pad(secs)}`);
-
-        if (soundEnabled && totalSec <= 3 && totalSec > 0 && lastBeepSecond.current !== totalSec) {
-          lastBeepSecond.current = totalSec;
-          playCountdownBeep(totalSec === 1);
-        }
       } else {
         setIsTradeActive(true);
         const candleRemainingMs = activeSig.time.getTime() + 60 * 1000 - now;
         const totalSec = Math.max(0, Math.ceil(candleRemainingMs / 1000));
         setCountdownText(`00:${pad(totalSec)}`);
-
-        if (soundEnabled && totalSec === 60 && lastBeepSecond.current !== 60) {
-          lastBeepSecond.current = 60;
-          playEntryFanfare();
-        }
       }
     }, 500);
 
     return () => clearInterval(interval);
-  }, [signals, soundEnabled]);
+  }, [signals]);
 
   // Mark result
   const handleMarkResult = (id: string, result: SignalResult) => {
@@ -380,8 +388,6 @@ export default function App() {
       <div className="w-full max-w-[490px] sm:max-w-xl min-h-screen bg-[var(--bg-base)] border-x border-[var(--border-subtle)] shadow-[0_0_90px_rgba(0,0,0,0.85)] flex flex-col relative pb-20 sm:pb-24">
         {/* Top Header with logo on Right and controls on Left */}
         <Header
-          soundEnabled={soundEnabled}
-          onToggleSound={toggleSound}
           onLockSession={handleLockSession}
           onSecretTrigger={() => setIsAdminAuthOpen(true)}
         />
@@ -452,7 +458,7 @@ export default function App() {
                 <div className="card-surface p-3 sm:p-3.5 space-y-2.5 shadow-xl">
                   <div className="flex items-center justify-between text-xs border-b border-[var(--border-subtle)] pb-2">
                     <span className="font-black text-[var(--gold-primary)] text-xs">
-                      الصفقات التالية في Hasone Trading:
+                      الصفقات التالية في حسون - Trading:
                     </span>
                     <button
                       onClick={() => setActiveTab('table')}
@@ -514,7 +520,12 @@ export default function App() {
             />
           )}
 
-          {/* TAB 3: STRATEGY */}
+          {/* TAB 3: QUOTEX AI BOT ANALYZER */}
+          {activeTab === 'analyzer' && (
+            <QuotexAiAnalyzerTab onImportSignalToLive={handleImportQuotexSignal} />
+          )}
+
+          {/* TAB 4: STRATEGY */}
           {activeTab === 'collection' && (
             <AreenCollectionTab onImportToLiveTracker={handleImportCollectionSignals} />
           )}

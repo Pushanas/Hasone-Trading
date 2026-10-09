@@ -377,25 +377,26 @@
 
 @media (max-width: 600px) {
   .navigation {
-    width: calc(100% - 24px);
+    width: calc(100% - 16px);
     height: 66px;
-    padding: 0 6px;
+    padding: 0 4px;
     border-radius: var(--radius-lg);
   }
 
   .navigation .nav-item {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 46px;
   }
 
   .navigation .nav-item .nav-label {
-    font-size: 8.5px;
+    font-size: 7.5px;
+    letter-spacing: -0.2px;
   }
 
   .navigation .profile {
-    width: 60px;
-    height: 60px;
-    margin-top: -32px;
+    width: 54px;
+    height: 54px;
+    margin-top: -28px;
   }
 }
 

@@ -26,6 +26,17 @@ const ADMIN_VAULT_KEY = 'hasone_admin_vault_v2';
 
 const SEED_LICENSES: LicenseRecord[] = [
   {
+    code: 'HASSONE-VIP-30D-9842-6311-GOLD',
+    status: 'active',
+    durationDays: 30,
+    boundIp: null,
+    boundDevice: null,
+    firstActivatedAt: null,
+    expiresAt: null,
+    createdAt: new Date().toISOString(),
+    notes: 'كود تفعيل VIP حصري لمنصة حسون - Trading مقيد بهاتف و IP واحد لمدة شهر كامل',
+  },
+  {
     code: 'HASONE-VIP-30D-9842-6311-GOLD',
     status: 'active',
     durationDays: 30,
@@ -34,7 +45,7 @@ const SEED_LICENSES: LicenseRecord[] = [
     firstActivatedAt: null,
     expiresAt: null,
     createdAt: new Date().toISOString(),
-    notes: 'كود تفعيل VIP حصري لمنصة Hasone Trading مقيد بهاتف و IP واحد لمدة شهر كامل',
+    notes: 'كود تفعيل VIP احتياطي مقيد بهاتف و IP واحد لمدة شهر كامل',
   },
   {
     code: 'AREEN-VIP-30D-7814-9923-GOLD',
@@ -173,7 +184,7 @@ export async function clientVerifyLicense(
   if (lic.status === 'revoked') {
     return {
       success: false,
-      error: '⚠️ تم إيقاف وتعطيل هذا الكود من قِبل إدارة Hasone Trading.',
+      error: '⚠️ تم إيقاف وتعطيل هذا الكود من قِبل إدارة حسون - Trading.',
     };
   }
 
@@ -207,7 +218,7 @@ export async function clientVerifyLicense(
     saveLocalLicenses(licenses);
     return {
       success: false,
-      error: '⏳ انتهت صلاحية هذا الكود. يرجى مراجعة إدارة Hasone Trading.',
+      error: '⏳ انتهت صلاحية هذا الكود. يرجى مراجعة إدارة حسون - Trading.',
     };
   }
 
@@ -260,7 +271,7 @@ export function clientCreateLicense(
 
   const code = customCode
     ? customCode.trim().toUpperCase()
-    : `HASONE-VIP-${days}D-${part1}-${part2}-GOLD`;
+    : `HASSONE-VIP-${days}D-${part1}-${part2}-GOLD`;
 
   const licenses = getLocalLicenses();
   if (licenses.some((l) => l.code === code)) {
@@ -356,7 +367,7 @@ export function exportLicensesBackup(): string {
   const licenses = getLocalLicenses();
   const stats = computeLicensesStats(licenses);
   const backupObject = {
-    app: 'Hasone Trading VIP',
+    app: 'حسون - Trading VIP',
     version: '2.0.0',
     exportedAt: new Date().toISOString(),
     stats,

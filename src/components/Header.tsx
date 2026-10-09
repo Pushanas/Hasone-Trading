@@ -1,17 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Volume2, VolumeX, Lock, Clock, Shield } from 'lucide-react';
-import emblemImage from '../assets/images/hasone_clear_logo_1791521412888.jpg';
+import { Lock, Clock, Shield } from 'lucide-react';
+import emblemImage from '../assets/images/hassone_trading_logo_1791569318604.jpg';
 
 interface HeaderProps {
-  soundEnabled: boolean;
-  onToggleSound: () => void;
   onLockSession: () => void;
   onSecretTrigger?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  soundEnabled,
-  onToggleSound,
   onLockSession,
   onSecretTrigger,
 }) => {
@@ -65,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative w-full h-full rounded-xl overflow-hidden border border-[var(--gold-border)] p-0.5 bg-[var(--bg-surface)] shadow-lg ring-1 ring-white/10">
               <img
                 src={emblemImage}
-                alt="Hasone Trading"
+                alt="حسون - Trading"
                 className="w-full h-full object-cover rounded-[9px]"
                 referrerPolicy="no-referrer"
               />
@@ -74,16 +70,15 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="text-right flex flex-col justify-center">
             <h1
-              className="text-xs sm:text-sm font-black text-[var(--text-primary)] tracking-wide leading-none whitespace-nowrap font-mono"
-              dir="ltr"
+              className="text-xs sm:text-sm font-black text-[var(--text-primary)] tracking-wide leading-none whitespace-nowrap"
             >
-              Hasone Trading
+              حسون - Trading
             </h1>
             <span
               className="text-[8px] sm:text-[9px] font-bold tracking-[0.16em] text-[var(--gold-primary)] uppercase block mt-1 font-mono leading-none whitespace-nowrap"
               dir="ltr"
             >
-              HASONE TRADING VIP
+              HASSONE TRADING VIP
             </span>
           </div>
         </div>
@@ -107,24 +102,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* ================= ZONE 3: ACTIONS & SECURITY (Left) ================= */}
         <div className="flex items-center gap-1.5 shrink-0" dir="ltr">
-          {/* Sound Toggle */}
-          <button
-            onClick={onToggleSound}
-            aria-label={soundEnabled ? 'كتم الصوت' : 'تشغيل الصوت'}
-            title={soundEnabled ? 'كتم التنبيهات الصوتية' : 'تشغيل التنبيهات الصوتية'}
-            className={`w-8 h-8 rounded-[var(--radius-md)] border transition-all flex items-center justify-center cursor-pointer shadow-xs active:scale-95 ${
-              soundEnabled
-                ? 'bg-[var(--gold-soft)] border-[var(--gold-border)] text-[var(--gold-primary)] hover:bg-[var(--bg-hover)]'
-                : 'bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            {soundEnabled ? (
-              <Volume2 className="w-4 h-4" />
-            ) : (
-              <VolumeX className="w-4 h-4" />
-            )}
-          </button>
-
           {/* Session Lock Button */}
           <button
             onClick={onLockSession}

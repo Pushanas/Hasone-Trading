@@ -33,8 +33,8 @@ export interface AreenStrategyDef {
 const STRATEGIES_LIST: AreenStrategyDef[] = [
   {
     id: 'lion_breakout',
-    name: '👑 استراتيجية Hasone Breakout (Golden Trend & Volume) — دقة +94%',
-    badge: 'Hasone Momentum',
+    name: '👑 استراتيجية حسون Breakout (Golden Trend & Volume) — دقة +94%',
+    badge: 'حسون Momentum',
     pattern: 'كسر مناطق العرض والطلب + فوليوم مؤسسي',
     indicators: ['Price Action', 'Smart Money Concepts', 'Volume Spike'],
     winRateEstimate: '+94%',
@@ -246,7 +246,7 @@ export const AreenCollectionTab: React.FC<AreenCollectionTabProps> = ({
     if (exportFormat === 'minimal') {
       return generatedSignals.map(formatSingleSignalMono).join('\n');
     }
-    const header = `⧉ HASONE TRADING SIGNALS (${generatedSignals.length} TRADES - ${timeframe})\n`;
+    const header = `⧉ HASSONE TRADING SIGNALS (${generatedSignals.length} TRADES - ${timeframe})\n`;
     const body = generatedSignals
       .map((s) => `${timeframe};${s.pair.replace('/', '').replace(' OTC', '').replace('-OTC', '')}•${s.timeStr};${s.direction}`)
       .join('\n');
@@ -296,7 +296,7 @@ export const AreenCollectionTab: React.FC<AreenCollectionTabProps> = ({
 
           <div className="text-right flex-1 px-3">
             <h2 className="text-sm sm:text-base font-black text-[var(--gold-primary)] tracking-tight">
-              استراتيجيات Hasone Trading الاحترافية
+              استراتيجيات حسون - Trading الاحترافية
             </h2>
             <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
               نماذج البرايس أكشن وتدفق السيولة الذكية (Smart Money Concepts)
@@ -535,7 +535,7 @@ export const AreenCollectionTab: React.FC<AreenCollectionTabProps> = ({
           >
             <Zap className="w-4 h-4 text-[var(--text-on-gold)] fill-current" />
             <span className="font-mono font-black tracking-wider uppercase text-xs sm:text-sm" dir="ltr">
-              GENERATE HASONE SIGNALS
+              GENERATE HASSONE SIGNALS
             </span>
             <Zap className="w-4 h-4 text-[var(--text-on-gold)] fill-current" />
           </button>
