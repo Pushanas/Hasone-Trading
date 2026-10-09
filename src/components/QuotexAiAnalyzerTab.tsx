@@ -41,11 +41,13 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
   const [copiedSignal, setCopiedSignal] = useState<boolean>(false);
   const [importedToLive, setImportedToLive] = useState<boolean>(false);
 
-  // Inception Candle Countdown
-  const [secondsToNextCandle, setSecondsToNextCandle] = useState<number>(60);
-
   // Mandatory 1-minute interval between trades (فاصل دقيقة في الصفقة)
   const [tradeCooldownSeconds, setTradeCooldownSeconds] = useState<number>(0);
+
+  // Active Signal Real-time Lead Buffer and Execution Phases
+  const [signalLeadSeconds, setSignalLeadSeconds] = useState<number>(0);
+  const [signalTradeSeconds, setSignalTradeSeconds] = useState<number>(0);
+  const [signalPhase, setSignalPhase] = useState<'IDLE' | 'PREPARATION' | 'ENTER_NOW' | 'ACTIVE_TRADE' | 'EXPIRED'>('IDLE');
 
   const selectedPair =
     QUOTEX_OTC_PAIRS.find((p) => p.id === selectedPairId) || QUOTEX_OTC_PAIRS[0];
@@ -59,24 +61,41 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
     { title: 'معالجة التحليل عبر خوارزمية Quotex Quant Engine 3.8...', icon: Cpu },
   ];
 
-  // 1. Exact Candle Inception Countdown Clock (XX:XX:00 Synchronization)
+  // 1. Active Signal Execution Phase Tracker (مهلة دقيقة للتجهيز -> ادخل الآن -> الشمعة جارية -> مكتملة)
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      const currentSeconds = now.getSeconds();
-      const tfMins = timeframe === 'M15' ? 15 : timeframe === 'M5' ? 5 : 1;
-      const currentMinutes = now.getMinutes();
+    if (!analysisResult) {
+      setSignalPhase('IDLE');
+      setSignalLeadSeconds(0);
+      setSignalTradeSeconds(0);
+      return;
+    }
 
-      // Seconds remaining until next candle boundary
-      const minutesRemaining = (tfMins - (currentMinutes % tfMins) - 1);
-      const secsRemaining = minutesRemaining * 60 + (60 - currentSeconds);
-      setSecondsToNextCandle(secsRemaining);
-    }, 500);
+    const checkSignalStatus = () => {
+      const now = Date.now();
+      const leadRem = Math.max(0, Math.round((analysisResult.targetTimestamp - now) / 1000));
+      const tradeRem = Math.max(0, Math.round((analysisResult.expiryTimestamp - now) / 1000));
 
-    return () => clearInterval(timer);
-  }, [timeframe]);
+      setSignalLeadSeconds(leadRem);
+      setSignalTradeSeconds(tradeRem);
 
-  // 4. Trade Cooldown Interval Timer (فاصل دقيقة إلزامي في الصفقة)
+      if (leadRem > 0) {
+        setSignalPhase('PREPARATION');
+      } else if (now < analysisResult.targetTimestamp + 10000) {
+        // First 10 seconds of candle start (00s)
+        setSignalPhase('ENTER_NOW');
+      } else if (tradeRem > 0) {
+        setSignalPhase('ACTIVE_TRADE');
+      } else {
+        setSignalPhase('EXPIRED');
+      }
+    };
+
+    checkSignalStatus();
+    const interval = setInterval(checkSignalStatus, 500);
+    return () => clearInterval(interval);
+  }, [analysisResult]);
+
+  // 3. Trade Cooldown Interval Timer
   useEffect(() => {
     if (tradeCooldownSeconds <= 0) return;
     const interval = setInterval(() => {
@@ -85,9 +104,9 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
     return () => clearInterval(interval);
   }, [tradeCooldownSeconds]);
 
-  // 5. Start Analysis Now action
+  // 4. Start Analysis Now action with guaranteed 1-minute lead window (فاصل دقيقة)
   const handleStartAnalysis = async () => {
-    if (tradeCooldownSeconds > 0) return;
+    if (isAnalyzing) return;
 
     setIsAnalyzing(true);
     setAnalysisStep(0);
@@ -101,16 +120,8 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
     }
 
     // Run primary mathematical confluence analysis using quotex algorithmic indicators
+    // (This automatically schedules entry with a guaranteed ~1 minute lead buffer)
     const localResult = runLocalQuotexAnalysis(selectedPairId, timeframe);
-
-    // Ensure entry time is strictly aligned to the upcoming candle start (00s)
-    const now = new Date();
-    const targetMs = now.getTime() + (secondsToNextCandle || 60) * 1000;
-    const targetDate = new Date(targetMs);
-    targetDate.setSeconds(0, 0);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    localResult.candleEntryTime = `${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}:00`;
-    localResult.targetCandleStr = `شمعة ${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}`;
 
     // Attempt Quotex Quant Engine server synthesis
     try {
@@ -141,8 +152,12 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
 
     setAnalysisResult(localResult);
     setIsAnalyzing(false);
-    // Enforce 1-minute trade cooldown interval (فاصل دقيقة في الصفقة)
-    setTradeCooldownSeconds(60);
+  };
+
+  // Reset or re-analyze
+  const handleResetSignal = () => {
+    setAnalysisResult(null);
+    setSignalPhase('IDLE');
   };
 
   // 5. Copy to Telegram format
@@ -293,103 +308,71 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
         </div>
       </div>
 
-      {/* ================= PROFESSIONAL CANDLE INCEPTION COUNTDOWN (كولد داون الدخول من بداية الشمعة) ================= */}
-      <div className="card-surface p-4 border-2 border-[var(--gold-border)] relative overflow-hidden space-y-3 shadow-md">
-        {/* Ambient Top Glow */}
-        <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-transparent via-[var(--gold-primary)] to-transparent opacity-90" />
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 transition-all ${
-                secondsToNextCandle <= 5
-                  ? 'bg-[rgba(16,185,129,0.2)] border-[var(--success)] text-[var(--success)] scale-105 shadow-sm'
-                  : 'bg-[var(--gold-soft)] border-[var(--gold-border)] text-[var(--gold-primary)]'
-              }`}
-            >
-              <Clock
-                className={`w-6 h-6 ${
-                  secondsToNextCandle <= 5 ? 'animate-bounce' : 'animate-pulse'
-                }`}
-              />
-            </div>
-            <div>
-              <span className="text-sm sm:text-base font-black text-[var(--text-primary)] block">
-                دخولك بعد وقت متبقي:
-              </span>
-            </div>
-          </div>
-
-          {/* Digital Cooldown / Countdown Counter Box */}
-          <div className="text-left font-mono" dir="ltr">
-            <div
-              className={`px-3.5 py-2 rounded-2xl border text-base sm:text-lg font-black tracking-widest shadow-sm transition-all flex items-center gap-2 ${
-                secondsToNextCandle <= 5
-                  ? 'bg-[rgba(16,185,129,0.22)] text-[var(--success)] border-[var(--success)] scale-105'
-                  : 'bg-[var(--bg-input)] text-[var(--gold-primary)] border-[var(--gold-border)]'
-              }`}
-            >
-              <span>
-                {String(Math.floor(secondsToNextCandle / 60)).padStart(2, '0')}:
-                {String(secondsToNextCandle % 60).padStart(2, '0')}
-              </span>
-              <span className="text-[10px] uppercase font-bold opacity-80">ثوانٍ ⏳</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Progress Bar for the Candle Inception Cycle */}
-        <div className="w-full bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-          <div
-            className={`h-full transition-all duration-300 ${
-              secondsToNextCandle <= 5
-                ? 'bg-[var(--success)]'
-                : 'bg-gradient-to-r from-[var(--accent-burgundy)] via-[var(--gold-primary)] to-[var(--gold-light)]'
-            }`}
-            style={{ width: `${((60 - (secondsToNextCandle % 60)) / 60) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      {/* ================= BIG ACTION BUTTON WITH 1-MINUTE MANDATORY COOLDOWN ================= */}
+      {/* ================= BIG ACTION BUTTON WITH 1-MINUTE LEAD INTERVAL ================= */}
       <div className="pt-0.5 space-y-2">
-        {tradeCooldownSeconds > 0 && (
-          <div className="p-3 rounded-2xl bg-[rgba(212,175,55,0.12)] border border-[var(--gold-border)] flex items-center justify-between text-xs animate-pulse">
-            <div className="flex items-center gap-2 text-[var(--gold-primary)] font-bold">
-              <Clock className="w-4 h-4 animate-spin text-[var(--gold-primary)]" />
-              <span>فاصل دقيقة إلزامي في الصفقة:</span>
-            </div>
-            <div className="font-mono font-black text-sm text-[var(--gold-primary)]" dir="ltr">
-              00:{String(tradeCooldownSeconds).padStart(2, '0')} ⏳
-            </div>
-          </div>
-        )}
-
         <button
           type="button"
           onClick={handleStartAnalysis}
-          disabled={isAnalyzing || tradeCooldownSeconds > 0}
-          className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[var(--gold-primary)] via-[var(--gold-light)] to-[var(--gold-primary)] text-[var(--text-on-gold)] font-black text-sm tracking-wider uppercase flex items-center justify-center gap-2 shadow-[0_8px_25px_rgba(212,175,55,0.3)] hover:shadow-[0_12px_30px_rgba(212,175,55,0.45)] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed font-mono"
+          disabled={isAnalyzing || signalPhase === 'PREPARATION' || signalPhase === 'ACTIVE_TRADE'}
+          className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.99] font-mono ${
+            signalPhase === 'ENTER_NOW'
+              ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 text-black shadow-emerald-500/40 animate-pulse'
+              : signalPhase === 'PREPARATION'
+              ? 'bg-gradient-to-r from-cyan-600 via-emerald-600 to-cyan-600 text-white shadow-cyan-500/20'
+              : 'bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-500 text-slate-950 hover:brightness-110 shadow-cyan-500/30'
+          } disabled:opacity-80 disabled:cursor-not-allowed`}
         >
           {isAnalyzing ? (
             <>
               <Cpu className="w-5 h-5 animate-spin" />
-              <span>SCANNING QUOTEX OTC & ANALYZING...</span>
+              <span>جاري سحب بيانات كوتكس وتحليل الشمعة...</span>
             </>
-          ) : tradeCooldownSeconds > 0 ? (
+          ) : signalPhase === 'PREPARATION' ? (
             <>
-              <Clock className="w-5 h-5 animate-pulse" />
+              <Clock className="w-5 h-5 animate-spin" />
               <span>
-                TRADE IN PROGRESS ▪ 00:{String(tradeCooldownSeconds).padStart(2, '0')} (1-MIN COOLDOWN)
+                مهلة التجهيز: 00:{String(signalLeadSeconds).padStart(2, '0')} ▪ جهز المنصة لـ {analysisResult?.symbol}
+              </span>
+            </>
+          ) : signalPhase === 'ENTER_NOW' ? (
+            <>
+              <Zap className="w-5 h-5 fill-current animate-bounce" />
+              <span>
+                🚨 ادخل الصفقة الآن فوراً! ({analysisResult?.decision === 'CALL' ? 'CALL صعود ⬆️' : 'PUT هبوط ⬇️'})
+              </span>
+            </>
+          ) : signalPhase === 'ACTIVE_TRADE' ? (
+            <>
+              <Activity className="w-5 h-5 animate-pulse" />
+              <span>
+                📊 شمعة الدقيقة جارية الآن (متبقي: 00:{String(signalTradeSeconds).padStart(2, '0')})
               </span>
             </>
           ) : (
             <>
               <Zap className="w-5 h-5 fill-current" />
-              <span>START ANALYSIS NOW</span>
+              <span>بدء تحليل صفقة كوتكس</span>
             </>
           )}
         </button>
+
+        {analysisResult && (
+          <div className="flex items-center justify-between px-1 text-xs">
+            <span className="text-[11px] text-[var(--text-muted)]">
+              {signalPhase === 'PREPARATION' && '⏳ لديك دقيقة كاملة لتجهيز المنصة والمبلغ والدخول في الوقت المحدد.'}
+              {signalPhase === 'ENTER_NOW' && '⚡ حان وقت الضغط على زر التداول فوراً مع افتتاح الشمعة!'}
+              {signalPhase === 'ACTIVE_TRADE' && '📈 الصفقة جارية على فريم 1 دقيقة، راقب حركة الشمعة على كوتكس.'}
+              {signalPhase === 'EXPIRED' && '✅ اكتملت شمعة الدقيقة بنجاح. يمكنك استخراج إشارة جديدة الآن.'}
+            </span>
+            <button
+              type="button"
+              onClick={handleResetSignal}
+              className="text-[11px] text-cyan-400 hover:text-cyan-300 underline cursor-pointer shrink-0"
+            >
+              تحليل زوج آخر
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ================= CINEMATIC STRATEGY SCANNING ANIMATION ================= */}
@@ -495,47 +478,107 @@ export const QuotexAiAnalyzerTab: React.FC<QuotexAiAnalyzerTabProps> = ({
             </div>
           </div>
 
-          {/* Real-time Inception Countdown Box (دخولك بعد وقت متبقي) */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[var(--bg-surface)] to-[var(--bg-input)] border border-[var(--gold-border)] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[var(--gold-soft)] border border-[var(--gold-border)] flex items-center justify-center text-[var(--gold-primary)] shrink-0">
-                <Clock className="w-4 h-4 animate-spin" />
-              </div>
-              <div>
-                <span className="text-xs sm:text-sm font-black text-[var(--text-primary)] block">
-                  دخولك بعد وقت متبقي:
-                </span>
-                <span className="text-[10px] text-[var(--text-muted)]">
-                  الدخول من بداية {analysisResult.targetCandleStr} عند (00s)
-                </span>
-              </div>
-            </div>
+          {/* ================= REAL-TIME SIGNAL EXECUTION PHASES & 1-MINUTE LEAD COUNTDOWN ================= */}
+          <div className="space-y-3">
+            {signalPhase === 'PREPARATION' && (
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-[var(--bg-surface)] to-emerald-950/30 border-2 border-cyan-500/50 shadow-lg shadow-cyan-500/10 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0 shadow-inner">
+                      <Clock className="w-6 h-6 animate-spin" />
+                    </div>
+                    <div>
+                      <span className="text-xs sm:text-sm font-black text-white block">
+                        مهلة التجهيز للدخول (فاصل دقيقة كاملة):
+                      </span>
+                      <span className="text-[11px] text-cyan-300/80">
+                        وقت الدخول: {analysisResult.candleEntryTime} (عند بداية الشمعة 00s)
+                      </span>
+                    </div>
+                  </div>
 
-            <div className="text-left font-mono" dir="ltr">
-              <span
-                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black border transition-all ${
-                  secondsToNextCandle <= 5
-                    ? 'bg-[rgba(16,185,129,0.2)] text-[var(--success)] border-[var(--success)] scale-105 inline-block'
-                    : 'bg-[var(--bg-surface)] text-[var(--gold-primary)] border-[var(--gold-border)] inline-block'
-                }`}
-              >
-                00:{String(secondsToNextCandle).padStart(2, '0')} ثانية ⏳
-              </span>
-            </div>
+                  <div className="text-left font-mono" dir="ltr">
+                    <div className="px-3.5 py-1.5 rounded-xl bg-cyan-950/70 border border-cyan-400 text-cyan-300 font-mono font-black text-lg tracking-wider shadow-sm">
+                      00:{String(signalLeadSeconds).padStart(2, '0')} ⏳
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preparation Guide Checklist */}
+                <div className="p-3 rounded-xl bg-[var(--bg-base)]/80 border border-cyan-500/20 text-xs space-y-1.5">
+                  <div className="text-[11px] font-bold text-cyan-400 flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>خطوات التجهيز خلال الدقيقة الحالية:</span>
+                  </div>
+                  <ul className="text-[11px] text-[var(--text-secondary)] space-y-1 pr-2 list-disc list-inside">
+                    <li>افتح منصة Quotex وابحث عن الزوج: <span className="font-bold text-white font-mono">{analysisResult.symbol}</span></li>
+                    <li>اضبط مدة الصفقة على: <span className="font-bold text-white">1 دقيقة ({analysisResult.candleExpiry})</span></li>
+                    <li>حدد مبلغ الاستثمار المناسب</li>
+                    <li>استعد للضغط على: <span className={`font-bold ${analysisResult.decision === 'CALL' ? 'text-emerald-400' : 'text-rose-400'}`}>{analysisResult.decision === 'CALL' ? 'CALL (صعود ⬆️)' : 'PUT (هبوط ⬇️)'}</span> فور وصول العداد لـ 00:00</li>
+                  </ul>
+                </div>
+
+                {/* Lead Time Progress Bar */}
+                <div className="w-full bg-[var(--bg-base)] h-2 rounded-full overflow-hidden border border-cyan-500/20">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, ((analysisResult.leadSeconds - signalLeadSeconds) / (analysisResult.leadSeconds || 60)) * 100))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {signalPhase === 'ENTER_NOW' && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 text-white shadow-xl shadow-emerald-500/30 border-2 border-emerald-300 animate-pulse text-center space-y-2">
+                <div className="flex items-center justify-center gap-2 text-base sm:text-lg font-black font-mono">
+                  <Zap className="w-6 h-6 fill-current animate-bounce" />
+                  <span>🚨 ادخل الصفقة الآن فوراً على كوتكس! 🚨</span>
+                </div>
+                <p className="text-xs font-bold text-emerald-100">
+                  انطلقت شمعة {analysisResult.targetCandleStr} عند (00s) — اتجاه الصفقة: {analysisResult.decision === 'CALL' ? 'CALL (صعود ⬆️)' : 'PUT (هبوط ⬇️)'}
+                </p>
+              </div>
+            )}
+
+            {signalPhase === 'ACTIVE_TRADE' && (
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-[var(--bg-surface)] to-emerald-950/30 border-2 border-indigo-500/40 shadow-md space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
+                    <span className="text-xs sm:text-sm font-black text-white">
+                      الصفقة جارية الآن على منصة Quotex:
+                    </span>
+                  </div>
+                  <div className="font-mono font-black text-xs sm:text-sm text-emerald-400" dir="ltr">
+                    متبقي 00:{String(signalTradeSeconds).padStart(2, '0')} ثانية ⏳
+                  </div>
+                </div>
+
+                <div className="w-full bg-[var(--bg-base)] h-2 rounded-full overflow-hidden border border-indigo-500/20">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, ((60 - signalTradeSeconds) / 60) * 100))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {signalPhase === 'EXPIRED' && (
+              <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                  <Check className="w-4 h-4" />
+                  <span>اكتملت صفقة الدقيقة (1M) بنجاح! جاهز لتحليل صفقة جديدة.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetSignal}
+                  className="px-3 py-1 rounded-xl bg-emerald-500 text-black font-bold text-[11px] hover:bg-emerald-400 transition-all cursor-pointer"
+                >
+                  تحليل جديد
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* Active 1-minute trade cooldown interval */}
-          {tradeCooldownSeconds > 0 && (
-            <div className="p-2.5 rounded-xl bg-[rgba(212,175,55,0.12)] border border-[var(--gold-border)] flex items-center justify-between text-xs animate-pulse">
-              <span className="text-[var(--gold-primary)] font-bold flex items-center gap-1.5">
-                <Clock className="w-4 h-4 animate-spin" />
-                <span>فاصل دقيقة إلزامي في الصفقة:</span>
-              </span>
-              <span className="font-mono font-black text-xs text-[var(--gold-primary)]" dir="ltr">
-                00:{String(tradeCooldownSeconds).padStart(2, '0')} ⏳
-              </span>
-            </div>
-          )}
 
           {/* Candle Inception & Timing Grid */}
           <div className="grid grid-cols-2 gap-2">

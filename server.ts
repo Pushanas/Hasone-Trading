@@ -748,7 +748,7 @@ Return ONLY valid JSON in this exact structure:
   "decision": "CALL",
   "aiThesis": "string in Arabic explaining the price action order block reasoning",
   "confidence": 96.5,
-  "strategyBadge": "👑 Hasone Golden Breakout (Quotex VIP)"
+  "strategyBadge": "👑 حسون Golden Breakout (Quotex VIP)"
 }`;
 
         const rawRes = await fetch(

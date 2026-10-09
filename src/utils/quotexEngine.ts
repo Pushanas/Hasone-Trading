@@ -52,6 +52,9 @@ export interface QuotexAnalysisResult {
   aiThesis: string;
   riskRewardAdvice: string;
   createdAt: number;
+  targetTimestamp: number; // Target entry timestamp in ms
+  expiryTimestamp: number; // Target trade expiry timestamp in ms
+  leadSeconds: number; // Guaranteed lead buffer in seconds (e.g. 60s)
 }
 
 /**
@@ -256,15 +259,20 @@ export function runLocalQuotexAnalysis(
   const candles = generateQuotexCandles(pair, 38, tfMins, liveBasePrice);
   const indicators = computeTechnicalIndicators(candles, pair);
 
-  // Determine Entry Time for NEXT upcoming candle
+  // Determine Entry Time with guaranteed 1-minute preparation window (فاصل دقيقة ليلحق المتداول بالدخول)
   const now = new Date();
-  const nextCandle = new Date(now.getTime() + tfMins * 60 * 1000);
-  // Zero out seconds for exact candle inception
-  nextCandle.setSeconds(0, 0);
+  const currentSec = now.getSeconds();
+  // If <= 15s into current minute, target next minute (giving 45-60s)
+  // Otherwise target minute + 2 (giving 60-105s) to guarantee a full comfortable buffer
+  const targetMinuteOffset = currentSec <= 15 ? 1 : 2;
+  const targetTimestamp = Math.floor(now.getTime() / 60000) * 60000 + targetMinuteOffset * 60000;
+  const nextCandle = new Date(targetTimestamp);
   
   const pad = (n: number) => String(n).padStart(2, '0');
   const entryTimeStr = `${pad(nextCandle.getHours())}:${pad(nextCandle.getMinutes())}:00`;
   const targetCandleStr = `شمعة ${pad(nextCandle.getHours())}:${pad(nextCandle.getMinutes())}`;
+  const leadSeconds = Math.max(0, Math.round((targetTimestamp - now.getTime()) / 1000));
+  const expiryTimestamp = targetTimestamp + tfMins * 60 * 1000;
 
   // Quantitative Confluence Scoring
   let callScore = 0;
@@ -332,6 +340,9 @@ export function runLocalQuotexAnalysis(
     aiThesis,
     riskRewardAdvice,
     createdAt: Date.now(),
+    targetTimestamp,
+    expiryTimestamp,
+    leadSeconds,
   };
 }
 
@@ -340,7 +351,6 @@ export function runLocalQuotexAnalysis(
  */
 export function formatQuotexTelegramSignal(result: QuotexAnalysisResult): string {
   const dirEmoji = result.decision === 'CALL' ? '🟢 صعود (CALL ⬆️)' : '🔴 هبوط (PUT ⬇️)';
-  const dirIcon = result.decision === 'CALL' ? '🟢' : '🔴';
 
   return `╔════════════════════════════════════╗
   👑 حسون - TRADING ▪ QUOTEX VIP BOT 👑
@@ -348,14 +358,15 @@ export function formatQuotexTelegramSignal(result: QuotexAnalysisResult): string
 
 🏢 المنصة: QUOTEX OTC PLATFORM
 📊 الزوج: ${result.flag} ${result.symbol}
-⏱️ الفريم: ${result.timeframe} (شموع ${result.timeframe})
+⏱️ الفريم: ${result.timeframe} (فاصل دقيقة M1)
 💰 نسبة العائد: ${result.payout}% Payout
 
 ━━━━━━━━━━━━━━━━━━━━━
 📍 اتجاه الصفقة: ${dirEmoji}
-⏳ توقيت الدخول: ${result.candleEntryTime} (من بداية الشمعة 00s)
-🎯 مدة الصفقة: ${result.candleExpiry}
-⚡ نسبة الدقة: ${result.confidence}% VIP Score
+⏳ توقيت الدخول: ${result.candleEntryTime} (بعد دقيقة للتجهيز)
+⏱️ مدة الصفقة: 1 دقيقة (${result.candleExpiry})
+⚡ مهلة الاستعداد: دقيقة كاملة لتجهيز المنصة والمبلغ
+🎯 نسبة الدقة: ${result.confidence}% VIP Score
 👑 الاستراتيجية: ${result.strategyBadge}
 ━━━━━━━━━━━━━━━━━━━━━
 
@@ -366,6 +377,6 @@ export function formatQuotexTelegramSignal(result: QuotexAnalysisResult): string
 • البلوك المؤسساتي: ${result.indicators.orderBlock.type} @ ${result.indicators.orderBlock.priceLevel}
 • نموذج الشمعة: ${result.indicators.candlePattern}
 
-⏱️ توقيت الدخول: مع بداية الشمعة القادمة عند (00s) مباشرة - فاصل دقيقة
+⏱️ تنبيه الدخول: ادخل عند (${result.candleEntryTime}) بدقة مع أول ثانية (00s)
 🏢 حسون - Trading VIP System ▪ Quotex Live Bot`;
 }
