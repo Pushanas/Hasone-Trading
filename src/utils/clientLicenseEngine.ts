@@ -249,14 +249,25 @@ export async function clientVerifyLicense(
 }
 
 /**
+ * Clears all created license codes from storage.
+ */
+export function clearAllCreatedLicenses(): void {
+  try {
+    localStorage.removeItem(PRIMARY_STORAGE_KEY);
+    localStorage.removeItem(BACKUP_STORAGE_KEY);
+    localStorage.removeItem('areen_active_license');
+  } catch {}
+}
+
+/**
  * Verifies admin password locally.
  */
 export function clientVerifyAdminPassword(password: string): boolean {
   const clean = password.trim();
-  return (
-    clean === 'Hasone@Admin#7744!Vault' ||
-    clean.toLowerCase() === 'hasone#admin9481!vip'
-  );
+  if (clean.toLowerCase() === 'hasone#admin9481!vip' || clean.toLowerCase() === 'hasone#2026!vip') {
+    return false;
+  }
+  return clean === 'Hasone@Admin#7744!Vault';
 }
 
 /**

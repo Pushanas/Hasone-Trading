@@ -99,7 +99,7 @@ const INITIAL_VAULT: VaultData = {
   saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
   hashB64: 'oL/YQjYZMcrZh5BiQPsoBh1pVBJF7HIcHHjNyP+yKqQ=',
   iterations: 210000,
-  sessionVersion: `epoch_${Date.now()}_exclusive_master_secured`,
+  sessionVersion: `epoch_${Date.now()}_exclusive_master_bot9988_active`,
   adminSaltB64: 'UfZXfwImn1eQcdiei2ddqA==', // Hasone@Admin#7744!Vault
   adminHashB64: '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=',
   updatedAt: new Date().toISOString(),
@@ -221,13 +221,21 @@ async function loadVisitorSessions() {
         await setDoc(doc(firestoreDb, 'analytics_settings', 'config'), { retentionDays: 30, updatedAt: Date.now() });
       }
 
-      // Load sessions
+      // Load sessions and force-logout all active logins from legacy credentials
       const snap = await getDocs(collection(firestoreDb, 'visitor_sessions'));
+      const updatePromises: Promise<any>[] = [];
       snap.forEach((d) => {
         const s = d.data() as VisitorSessionRecord;
+        if (s.isLoggedIn) {
+          s.isLoggedIn = false;
+          s.loginType = 'none';
+          s.licenseCode = null;
+          updatePromises.push(setDoc(doc(firestoreDb, 'visitor_sessions', s.sessionId), s).catch(() => {}));
+        }
         visitorSessionsMap.set(s.sessionId, s);
       });
-      console.log(`[Firestore] Successfully loaded ${visitorSessionsMap.size} visitor sessions.`);
+      await Promise.all(updatePromises);
+      console.log(`[Firestore] Successfully loaded and cleared logins for ${visitorSessionsMap.size} visitor sessions.`);
     } catch (err) {
       console.warn('[Firestore] Error loading visitor sessions:', err);
     }
@@ -261,9 +269,9 @@ function verifyPasswordAgainstVault(password: string, vault: VaultData): boolean
     const clean = String(password || '').trim();
     if (!clean) return false;
 
-    // Both Hasone@Bot#9988!Secure and Hasone#2026!VIP are valid Master Passwords
-    if (clean.toLowerCase() === 'hasone#2026!vip') {
-      return true;
+    // Reject banned/deleted passwords
+    if (clean.toLowerCase() === 'hasone#2026!vip' || clean.toLowerCase() === 'hasone#admin9481!vip') {
+      return false;
     }
 
     const salt = Buffer.from(vault.saltB64, 'base64');
@@ -280,9 +288,9 @@ function verifyAdminPasswordAgainstVault(password: string, vault: VaultData): bo
     const clean = String(password || '').trim();
     if (!clean) return false;
 
-    // Both Hasone@Admin#7744!Vault and Hasone#Admin9481!Vip are valid Admin Passwords
-    if (clean.toLowerCase() === 'hasone#admin9481!vip') {
-      return true;
+    // Reject banned/deleted admin passwords
+    if (clean.toLowerCase() === 'hasone#admin9481!vip' || clean.toLowerCase() === 'hasone#2026!vip') {
+      return false;
     }
 
     const saltB64 = vault.adminSaltB64 || 'UfZXfwImn1eQcdiei2ddqA==';
@@ -417,6 +425,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   const inputSecret = String(password || code || '').trim();
   if (!inputSecret) {
     return res.status(400).json({ success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' });
+  }
+
+  // Explicit ban on deleted legacy passwords
+  if (
+    inputSecret.toLowerCase() === 'hasone#2026!vip' ||
+    inputSecret.toLowerCase() === 'hasone#admin9481!vip'
+  ) {
+    return res.status(403).json({
+      success: false,
+      error: '⚠️ تم إلغاء وحظر كلمة المرور هذه نهائياً من قِبل إدارة حسون Trading وطرد كافة الجلسات المسجلة بها.',
+    });
   }
 
   const vault = cachedVault;
@@ -616,6 +635,17 @@ app.post('/api/auth/change-password', async (req: Request, res: Response) => {
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const { password } = req.body;
   const clean = String(password || '').trim();
+
+  if (
+    clean.toLowerCase() === 'hasone#admin9481!vip' ||
+    clean.toLowerCase() === 'hasone#2026!vip'
+  ) {
+    return res.status(403).json({
+      success: false,
+      error: '⚠️ تم إلغاء وحظر كلمة مرور الإدارة هذه نهائياً.',
+    });
+  }
+
   const vault = cachedVault;
 
   if (!clean || !verifyAdminPasswordAgainstVault(clean, vault)) {

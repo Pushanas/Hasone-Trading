@@ -16,6 +16,7 @@ import { MagicNavigationBar, NavTabType } from './components/MagicNavigationBar'
 import { DEFAULT_PAIRS } from './constants/pairs';
 import { GeneratorConfig, SignalItem, SignalResult } from './types';
 import { checkSessionValidity } from './utils/crypto';
+import { clearAllCreatedLicenses } from './utils/clientLicenseEngine';
 import { formatSingleSignalMono } from './utils/formatter';
 import { initVisitorAnalytics, trackPageView } from './utils/visitorTracker';
 
@@ -71,12 +72,13 @@ export default function App() {
   const lastBeepSecond = useRef<number>(-1);
   const lastActivityTime = useRef<number>(Date.now());
 
-  // Handle Authentication cleanup - erase all legacy pins, stale hashes, and obsolete admin tokens
+  // Handle Authentication cleanup - erase all legacy pins, stale hashes, obsolete admin tokens, and created licenses
   useEffect(() => {
     localStorage.removeItem('areen_custom_pin');
     localStorage.removeItem('areen_auth_salt');
     localStorage.removeItem('areen_auth_hash');
     localStorage.removeItem('hasone_admin_vault_v2');
+    clearAllCreatedLicenses();
   }, []);
 
   const handleForcedKickout = (msg?: string) => {
@@ -87,9 +89,10 @@ export default function App() {
     localStorage.removeItem('areen_auth_salt');
     localStorage.removeItem('areen_auth_hash');
     localStorage.removeItem('hasone_admin_vault_v2');
+    clearAllCreatedLicenses();
     setSignals([]);
     setKickoutAlert(
-      msg || 'تم تحديث أمان الجلسات وحصر الدخول بكلمات المرور المعتمدة فقط. تم إنهاء الجلسة وطرد كافة الأجهزة غير المصرح لها.'
+      msg || 'تم تحديث أمان المنصة وطرد كافة الجلسات المسجلة بكلمات المرور الملغاة. يرجى تسجيل الدخول بالكلمات المعتمدة.'
     );
   };
 

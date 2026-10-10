@@ -57,8 +57,8 @@ export function getDeviceFingerprint(): string {
 // Client-side local PBKDF2 verification fallback
 async function localPbkdf2Verify(password: string): Promise<boolean> {
   const clean = password.trim();
-  if (clean.toLowerCase() === 'hasone#2026!vip') {
-    return true;
+  if (clean.toLowerCase() === 'hasone#2026!vip' || clean.toLowerCase() === 'hasone#admin9481!vip') {
+    return false;
   }
 
   try {
@@ -110,6 +110,13 @@ export async function verifyMasterPassword(
   const clean = inputSecret.trim();
   if (!clean) {
     return { success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' };
+  }
+
+  if (clean.toLowerCase() === 'hasone#2026!vip' || clean.toLowerCase() === 'hasone#admin9481!vip') {
+    return {
+      success: false,
+      error: '⚠️ تم إلغاء وحظر كلمة المرور هذه نهائياً من قِبل إدارة حسون Trading وطرد كافة الجلسات المسجلة بها.',
+    };
   }
 
   const deviceFingerprint = getDeviceFingerprint();
