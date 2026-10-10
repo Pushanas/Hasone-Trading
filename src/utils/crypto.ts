@@ -1,5 +1,6 @@
 // Unified Master Cryptographic Engine, 1-Device/IP License Engine & Server Sync for Al-Areen Al-Dahabi
 import { clientVerifyLicense } from './clientLicenseEngine';
+import { recordVisitorLogin } from './visitorTracker';
 
 const DEFAULT_VAULT = {
   saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
@@ -141,6 +142,7 @@ export async function verifyMasterPassword(
             })
           );
         }
+        recordVisitorLogin(data.type || 'master', data.licenseCode || null).catch(() => {});
         return {
           success: true,
           sessionVersion: data.sessionVersion,
@@ -174,6 +176,7 @@ export async function verifyMasterPassword(
           daysRemaining: licResult.daysRemaining,
         })
       );
+      recordVisitorLogin('license_vip', licResult.licenseCode).catch(() => {});
       return {
         success: true,
         sessionVersion: fallbackVer,
@@ -194,6 +197,7 @@ export async function verifyMasterPassword(
     if (ok) {
       const fallbackVer = localStorage.getItem('areen_auth_epoch') || 'v1';
       sessionStorage.setItem('areen_session_version', fallbackVer);
+      recordVisitorLogin('master', null).catch(() => {});
       return { success: true, sessionVersion: fallbackVer };
     }
 

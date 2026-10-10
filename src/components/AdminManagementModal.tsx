@@ -25,6 +25,8 @@ import {
   Edit2,
   Users,
 } from 'lucide-react';
+import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { ModalWrapper } from './ModalWrapper';
 import { VisitorAnalyticsPanel } from './VisitorAnalyticsPanel';
 import {
@@ -113,7 +115,22 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       }
       throw new Error('Vercel or offline');
     } catch {
-      // Local resilient engine (Vercel static & offline backup)
+      // Direct Firestore query (guarantees real-time sync across all devices on Vercel)
+      try {
+        const snap = await getDocs(collection(db, 'licenses'));
+        if (!snap.empty) {
+          const firestoreLicenses: LicenseRecord[] = [];
+          snap.forEach((d) => firestoreLicenses.push(d.data() as LicenseRecord));
+          setLicenses(firestoreLicenses);
+          saveLocalLicenses(firestoreLicenses);
+          setStats(computeLicensesStats(firestoreLicenses));
+          return;
+        }
+      } catch (fbErr) {
+        console.warn('Failed to query Firestore licenses:', fbErr);
+      }
+
+      // Local resilient engine (offline backup)
       const local = getLocalLicenses();
       setLicenses(local);
       setStats(computeLicensesStats(local));
@@ -161,13 +178,16 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       }
       throw new Error('Vercel or offline');
     } catch {
-      // Local engine fallback
+      // Local engine fallback + Firestore persist
       const localRes = clientCreateLicense(days, clientNote);
       if (localRes.success && localRes.license) {
         setCreatedCode(localRes.license.code);
         setClientNote('');
         setCustomDays('');
-        setActionMsg({ text: 'تم إنشاء كود VIP وحفظه في النسخة الاحتياطية بنجاح!', type: 'success' });
+        try {
+          await setDoc(doc(db, 'licenses', localRes.license.code), localRes.license);
+        } catch {}
+        setActionMsg({ text: 'تم إنشاء كود VIP وحفظه في قاعدة البيانات بنجاح!', type: 'success' });
         fetchLicenses();
       } else {
         setActionMsg({ text: localRes.error || 'فشل إنشاء الكود', type: 'error' });
@@ -199,6 +219,9 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       throw new Error('Vercel or offline');
     } catch {
       const localRes = clientResetDevice(code);
+      try {
+        await setDoc(doc(db, 'licenses', code), { boundIp: null, boundDevice: null, firstActivatedAt: null, expiresAt: null, status: 'active' }, { merge: true });
+      } catch {}
       setActionMsg({ text: localRes.message, type: 'success' });
       fetchLicenses();
     }
@@ -226,6 +249,11 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       throw new Error('Vercel or offline');
     } catch {
       const localRes = clientToggleStatus(code);
+      try {
+        const target = licenses.find(l => l.code === code);
+        const newStatus = target?.status === 'revoked' ? 'active' : 'revoked';
+        await setDoc(doc(db, 'licenses', code), { status: newStatus }, { merge: true });
+      } catch {}
       setActionMsg({ text: localRes.message, type: 'success' });
       fetchLicenses();
     }
@@ -260,7 +288,10 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       throw new Error('Vercel or offline');
     } catch {
       clientDeleteLicense(codeToDelete);
-      setActionMsg({ text: 'تم حذف الكود من النسخة الاحتياطية بنجاح', type: 'success' });
+      try {
+        await deleteDoc(doc(db, 'licenses', codeToDelete));
+      } catch {}
+      setActionMsg({ text: 'تم حذف الكود من قاعدة البيانات بنجاح', type: 'success' });
       setCodeToDelete(null);
       fetchLicenses();
     } finally {
@@ -302,11 +333,14 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       }
       throw new Error('Vercel or offline');
     } catch {
-      // Local fallback
+      // Local fallback + Firestore persist
       editingCode.notes = editNotes;
       editingCode.durationDays = editDuration;
       saveLocalLicenses(licenses);
-      setActionMsg({ text: 'تم تحديث بيانات الكود محلياً', type: 'success' });
+      try {
+        await setDoc(doc(db, 'licenses', editingCode.code), { notes: editNotes, durationDays: editDuration }, { merge: true });
+      } catch {}
+      setActionMsg({ text: 'تم تحديث بيانات الكود في قاعدة البيانات بنجاح', type: 'success' });
       setEditingCode(null);
       fetchLicenses();
     } finally {

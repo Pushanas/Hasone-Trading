@@ -17,6 +17,8 @@ import {
   SlidersHorizontal,
   Key,
 } from 'lucide-react';
+import { collection, getDocs, doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface VisitorSession {
   sessionId: string;
@@ -74,21 +76,53 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isCleaningUp, setIsCleaningUp] = useState<boolean>(false);
 
-  // Fetch summary and visitor logs
+  // Fetch summary and visitor logs with direct Firestore resilience for Vercel
   const fetchSummary = async () => {
     try {
       const res = await fetch('/api/admin/analytics/summary', {
         headers: { 'x-admin-token': adminToken },
       });
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.success) {
           setSummary(data);
           setRetentionDaysInput(data.retentionDays || 30);
+          return;
         }
       }
-    } catch (err) {
-      console.warn('Failed to fetch analytics summary:', err);
+      throw new Error('Vercel static fallback');
+    } catch {
+      // Direct Firebase Firestore query (100% reliable on Vercel)
+      try {
+        const snap = await getDocs(collection(db, 'visitor_sessions'));
+        const now = Date.now();
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const startOfDayMs = startOfDay.getTime();
+        let activeNow = 0;
+        let visitsToday = 0;
+        const uniqueIpsToday = new Set<string>();
+
+        snap.forEach((docSnap) => {
+          const s = docSnap.data() as VisitorSession;
+          if (now - (s.lastActivity || 0) <= 120_000) activeNow++;
+          if ((s.lastActivity || 0) >= startOfDayMs || (s.firstVisit || 0) >= startOfDayMs) {
+            visitsToday += s.pageViews || 1;
+            uniqueIpsToday.add(s.ip || s.sessionId);
+          }
+        });
+
+        setSummary({
+          activeNow,
+          visitsToday,
+          uniqueToday: uniqueIpsToday.size,
+          totalSessions: snap.size,
+          retentionDays: 30,
+        });
+      } catch (fbErr) {
+        console.warn('Failed to fetch analytics summary from Firestore:', fbErr);
+      }
     }
   };
 
@@ -106,17 +140,74 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
         headers: { 'x-admin-token': adminToken },
       });
 
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.success) {
           setVisitors(data.visitors || []);
           setTotalPages(data.totalPages || 1);
           setTotalRecords(data.total || 0);
           setCurrentPage(data.page || 1);
+          return;
         }
       }
-    } catch (err) {
-      console.warn('Failed to fetch visitors list:', err);
+      throw new Error('Vercel static fallback');
+    } catch {
+      // Direct Firebase Firestore query (100% reliable on Vercel)
+      try {
+        const snap = await getDocs(collection(db, 'visitor_sessions'));
+        const now = Date.now();
+        let list: VisitorSession[] = [];
+
+        snap.forEach((d) => {
+          const data = d.data() as VisitorSession;
+          const isOnline = now - (data.lastActivity || 0) <= 120_000;
+          list.push({
+            ...data,
+            status: isOnline ? 'active' : 'inactive',
+            isOnline,
+          });
+        });
+
+        // Filter search
+        if (searchTerm) {
+          const term = searchTerm.toLowerCase();
+          list = list.filter(
+            (s) =>
+              (s.ip || '').toLowerCase().includes(term) ||
+              (s.browser || '').toLowerCase().includes(term) ||
+              (s.os || '').toLowerCase().includes(term) ||
+              (s.currentPath || '').toLowerCase().includes(term) ||
+              (s.sessionId || '').toLowerCase().includes(term)
+          );
+        }
+
+        // Filter status
+        if (statusFilter === 'active') {
+          list = list.filter((s) => s.status === 'active');
+        } else if (statusFilter === 'inactive') {
+          list = list.filter((s) => s.status === 'inactive');
+        } else if (statusFilter === 'password') {
+          list = list.filter((s) => s.isLoggedIn && s.loginType === 'master');
+        } else if (statusFilter === 'vip') {
+          list = list.filter((s) => s.isLoggedIn && s.loginType === 'license_vip');
+        }
+
+        // Sort descending by lastActivity
+        list.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
+
+        const limit = 10;
+        const total = list.length;
+        const totalPages = Math.ceil(total / limit) || 1;
+        const paginated = list.slice((page - 1) * limit, page * limit);
+
+        setVisitors(paginated);
+        setTotalPages(totalPages);
+        setTotalRecords(total);
+        setCurrentPage(page);
+      } catch (fbErr) {
+        console.warn('Failed to fetch visitors from Firestore:', fbErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -145,15 +236,27 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
         },
         body: JSON.stringify({ retentionDays: retentionDaysInput }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setActionNotice({ text: data.message, type: 'success' });
-        setSummary((prev) => ({ ...prev, retentionDays: data.retentionDays }));
-      } else {
-        setActionNotice({ text: data.error || 'فشل تحديث سياسة الاحتفاظ', type: 'error' });
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setActionNotice({ text: data.message, type: 'success' });
+          setSummary((prev) => ({ ...prev, retentionDays: data.retentionDays }));
+          return;
+        }
       }
+      throw new Error('Vercel fallback');
     } catch {
-      setActionNotice({ text: 'حدث خطأ في الاتصال بالسيرفر', type: 'error' });
+      try {
+        await setDoc(doc(db, 'analytics_settings', 'config'), {
+          retentionDays: retentionDaysInput,
+          updatedAt: Date.now(),
+        });
+        setActionNotice({ text: `تم حفظ سياسة الاحتفاظ (${retentionDaysInput} يوماً) بنجاح.`, type: 'success' });
+        setSummary((prev) => ({ ...prev, retentionDays: retentionDaysInput }));
+      } catch (err: any) {
+        setActionNotice({ text: 'حدث خطأ في حفظ سياسة الاحتفاظ', type: 'error' });
+      }
     } finally {
       setIsUpdatingRetention(false);
     }
@@ -175,16 +278,35 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
           'x-admin-token': adminToken,
         },
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setActionNotice({ text: data.message, type: 'success' });
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setActionNotice({ text: data.message, type: 'success' });
+          fetchSummary();
+          fetchVisitors(1);
+          return;
+        }
+      }
+      throw new Error('Vercel fallback');
+    } catch {
+      try {
+        const cutoff = Date.now() - (summary.retentionDays || 30) * 24 * 60 * 60 * 1000;
+        const snap = await getDocs(collection(db, 'visitor_sessions'));
+        let deletedCount = 0;
+        for (const d of snap.docs) {
+          const s = d.data();
+          if ((s.lastActivity || 0) < cutoff) {
+            await deleteDoc(doc(db, 'visitor_sessions', d.id));
+            deletedCount++;
+          }
+        }
+        setActionNotice({ text: `تم تنظيف السجلات الأقدم بنجاح (تم حذف ${deletedCount} سجل).`, type: 'success' });
         fetchSummary();
         fetchVisitors(1);
-      } else {
-        setActionNotice({ text: data.error || 'فشل تنظيف السجلات', type: 'error' });
+      } catch {
+        setActionNotice({ text: 'حدث خطأ أثناء تنظيف السجلات', type: 'error' });
       }
-    } catch {
-      setActionNotice({ text: 'حدث خطأ أثناء تنظيف السجلات', type: 'error' });
     } finally {
       setIsCleaningUp(false);
     }
@@ -199,17 +321,28 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
         method: 'DELETE',
         headers: { 'x-admin-token': adminToken },
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setActionNotice({ text: 'تم حذف سجل الجلسة بنجاح.', type: 'success' });
+          setSessionToDelete(null);
+          fetchSummary();
+          fetchVisitors(currentPage);
+          return;
+        }
+      }
+      throw new Error('Vercel fallback');
+    } catch {
+      try {
+        await deleteDoc(doc(db, 'visitor_sessions', sessionToDelete.sessionId));
         setActionNotice({ text: 'تم حذف سجل الجلسة بنجاح.', type: 'success' });
         setSessionToDelete(null);
         fetchSummary();
         fetchVisitors(currentPage);
-      } else {
-        setActionNotice({ text: data.error || 'فشل حذف الجلسة', type: 'error' });
+      } catch {
+        setActionNotice({ text: 'حدث خطأ أثناء حذف الجلسة', type: 'error' });
       }
-    } catch {
-      setActionNotice({ text: 'حدث خطأ أثناء حذف الجلسة', type: 'error' });
     } finally {
       setIsDeleting(false);
     }

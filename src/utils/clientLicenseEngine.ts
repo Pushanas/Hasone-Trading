@@ -1,5 +1,7 @@
 // Resilient Client-Side License Engine & Automated Backup System
 // Designed for 100% offline & Vercel serverless / static hosting resilience.
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export interface LicenseRecord {
   code: string;
@@ -156,11 +158,21 @@ export async function clientVerifyLicense(
       l.code.replace(/-/g, '').toUpperCase() === cleanNoDash
   );
 
-  if (idx === -1) {
-    return { success: false, error: 'كود التفعيل VIP غير صحيح' };
+  let lic: LicenseRecord | undefined = idx !== -1 ? licenses[idx] : undefined;
+
+  if (!lic) {
+    // Try querying Firestore directly (for codes created by admin on Vercel)
+    try {
+      const snap = await getDoc(doc(db, 'licenses', cleanInput));
+      if (snap.exists()) {
+        lic = snap.data() as LicenseRecord;
+      }
+    } catch {}
   }
 
-  const lic = licenses[idx];
+  if (!lic) {
+    return { success: false, error: 'كود التفعيل VIP غير صحيح' };
+  }
 
   if (lic.status === 'revoked') {
     return {
@@ -180,8 +192,15 @@ export async function clientVerifyLicense(
     lic.expiresAt = now + (lic.durationDays || 30) * 24 * 60 * 60 * 1000;
     lic.status = 'active';
 
-    licenses[idx] = lic;
+    if (idx !== -1) {
+      licenses[idx] = lic;
+    } else {
+      licenses.unshift(lic);
+    }
     saveLocalLicenses(licenses);
+    try {
+      await setDoc(doc(db, 'licenses', lic.code), lic, { merge: true });
+    } catch {}
 
     return {
       success: true,
