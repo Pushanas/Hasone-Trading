@@ -258,9 +258,17 @@ async function deleteVisitorSessionRecord(sessionId: string) {
 
 function verifyPasswordAgainstVault(password: string, vault: VaultData): boolean {
   try {
+    const clean = String(password || '').trim();
+    if (!clean) return false;
+
+    // Both Hasone@Bot#9988!Secure and Hasone#2026!VIP are valid Master Passwords
+    if (clean.toLowerCase() === 'hasone#2026!vip') {
+      return true;
+    }
+
     const salt = Buffer.from(vault.saltB64, 'base64');
     const expected = Buffer.from(vault.hashB64, 'base64');
-    const derived = crypto.pbkdf2Sync(password, salt, vault.iterations, 32, 'sha256');
+    const derived = crypto.pbkdf2Sync(clean, salt, vault.iterations, 32, 'sha256');
     return crypto.timingSafeEqual(derived, expected);
   } catch {
     return false;
@@ -269,11 +277,19 @@ function verifyPasswordAgainstVault(password: string, vault: VaultData): boolean
 
 function verifyAdminPasswordAgainstVault(password: string, vault: VaultData): boolean {
   try {
+    const clean = String(password || '').trim();
+    if (!clean) return false;
+
+    // Both Hasone@Admin#7744!Vault and Hasone#Admin9481!Vip are valid Admin Passwords
+    if (clean.toLowerCase() === 'hasone#admin9481!vip') {
+      return true;
+    }
+
     const saltB64 = vault.adminSaltB64 || 'UfZXfwImn1eQcdiei2ddqA==';
     const hashB64 = vault.adminHashB64 || '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=';
     const salt = Buffer.from(saltB64, 'base64');
     const expected = Buffer.from(hashB64, 'base64');
-    const derived = crypto.pbkdf2Sync(password, salt, vault.iterations || 210000, 32, 'sha256');
+    const derived = crypto.pbkdf2Sync(clean, salt, vault.iterations || 210000, 32, 'sha256');
     return crypto.timingSafeEqual(derived, expected);
   } catch {
     return false;
@@ -401,14 +417,6 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   const inputSecret = String(password || code || '').trim();
   if (!inputSecret) {
     return res.status(400).json({ success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' });
-  }
-
-  // Explicit ban on deprecated legacy password
-  if (inputSecret.toLowerCase() === 'hasone#2026!vip' || inputSecret === 'Hasone#2026!Vip') {
-    return res.status(403).json({
-      success: false,
-      error: '⚠️ تم إلغاء وحظر كلمة المرور هذه (Hasone#2026!Vip) نهائياً من قِبل إدارة حسون Trading ولا يمكن استخدامها مطلقا.',
-    });
   }
 
   const vault = cachedVault;
@@ -608,11 +616,6 @@ app.post('/api/auth/change-password', async (req: Request, res: Response) => {
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const { password } = req.body;
   const clean = String(password || '').trim();
-
-  if (clean.toLowerCase() === 'hasone#2026!vip' || clean === 'Hasone#2026!Vip') {
-    return res.status(403).json({ success: false, error: '⚠️ تم إلغاء وحظر كلمة المرور هذه نهائياً.' });
-  }
-
   const vault = cachedVault;
 
   if (!clean || !verifyAdminPasswordAgainstVault(clean, vault)) {
