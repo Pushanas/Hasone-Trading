@@ -1,15 +1,28 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  doc,
+  getDocFromServer,
+  setLogLevel,
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Suppress benign internal gRPC idle stream disconnect warnings
-setLogLevel('error');
+// Suppress benign internal stream disconnect & offline notifications
+setLogLevel('silent');
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Initialize Firestore with auto-detect long polling to prevent 10s WebSocket timeouts in iframes & proxies
+export const db = initializeFirestore(
+  app,
+  {
+    experimentalAutoDetectLongPolling: true,
+  },
+  firebaseConfig.firestoreDatabaseId
+);
 
 export enum OperationType {
   CREATE = 'create',
@@ -58,14 +71,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Initial connection test as mandated by skill
+// Initial connection test with safe timeout to prevent blocking on slow networks
 export async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'licenses', 'test_connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Please check your Firebase configuration or internet connection.');
-    }
+    const testPromise = getDocFromServer(doc(db, 'licenses', 'test_connection'));
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Connection timed out, using resilient offline mode')), 2500)
+    );
+    await Promise.race([testPromise, timeoutPromise]);
+  } catch {
+    // Client smoothly operates in resilient offline/cache mode
   }
 }
 

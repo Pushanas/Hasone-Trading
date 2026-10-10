@@ -108,6 +108,14 @@ export function parseClientUserAgent(uaString?: string) {
   return { deviceCategory, os, browser };
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number = 3000): Promise<T> {
+  let timer: any;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Persists session directly into Firestore to guarantee live display even when hosted statically on Vercel
  */
@@ -117,39 +125,45 @@ async function syncSessionToFirestore(sessionId: string, currentPath: string) {
     const ua = parseClientUserAgent();
     const now = Date.now();
     const sessionRef = doc(db, 'visitor_sessions', sessionId);
-    const existingSnap = await getDoc(sessionRef);
+    const existingSnap = await withTimeout(getDoc(sessionRef), 2500);
 
     if (existingSnap.exists()) {
       const data = existingSnap.data();
-      await setDoc(
-        sessionRef,
-        {
-          lastActivity: now,
-          currentPath,
-          pageViews: (data.pageViews || 1) + 1,
-          status: 'active',
-          ip: ip && ip !== '127.0.0.1' ? ip : data.ip || '127.0.0.1',
-        },
-        { merge: true }
+      await withTimeout(
+        setDoc(
+          sessionRef,
+          {
+            lastActivity: now,
+            currentPath,
+            pageViews: (data.pageViews || 1) + 1,
+            status: 'active',
+            ip: ip && ip !== '127.0.0.1' ? ip : data.ip || '127.0.0.1',
+          },
+          { merge: true }
+        ),
+        2500
       );
     } else {
-      await setDoc(sessionRef, {
-        sessionId,
-        ip: ip || '127.0.0.1',
-        deviceCategory: ua.deviceCategory,
-        browser: ua.browser,
-        os: ua.os,
-        firstVisit: now,
-        lastActivity: now,
-        currentPath,
-        pageViews: 1,
-        status: 'active',
-        isLoggedIn: false,
-        loginType: 'none',
-      });
+      await withTimeout(
+        setDoc(sessionRef, {
+          sessionId,
+          ip: ip || '127.0.0.1',
+          deviceCategory: ua.deviceCategory,
+          browser: ua.browser,
+          os: ua.os,
+          firstVisit: now,
+          lastActivity: now,
+          currentPath,
+          pageViews: 1,
+          status: 'active',
+          isLoggedIn: false,
+          loginType: 'none',
+        }),
+        2500
+      );
     }
   } catch (err) {
-    console.warn('[Visitor Tracker Firestore Sync Notice]:', err);
+    // Non-blocking offline resilience
   }
 }
 
@@ -167,41 +181,47 @@ export async function recordVisitorLogin(
     const ip = await fetchClientPublicIp();
     const now = Date.now();
     const sessionRef = doc(db, 'visitor_sessions', sessionId);
-    const existingSnap = await getDoc(sessionRef);
+    const existingSnap = await withTimeout(getDoc(sessionRef), 2500);
 
     if (existingSnap.exists()) {
-      await setDoc(
-        sessionRef,
-        {
-          isLoggedIn: true,
-          loginType,
-          licenseCode: licenseCode || null,
-          lastActivity: now,
-          status: 'active',
-          ip: ip && ip !== '127.0.0.1' ? ip : existingSnap.data()?.ip || '127.0.0.1',
-        },
-        { merge: true }
+      await withTimeout(
+        setDoc(
+          sessionRef,
+          {
+            isLoggedIn: true,
+            loginType,
+            licenseCode: licenseCode || null,
+            lastActivity: now,
+            status: 'active',
+            ip: ip && ip !== '127.0.0.1' ? ip : existingSnap.data()?.ip || '127.0.0.1',
+          },
+          { merge: true }
+        ),
+        2500
       );
     } else {
       const ua = parseClientUserAgent();
-      await setDoc(sessionRef, {
-        sessionId,
-        ip: ip || '127.0.0.1',
-        deviceCategory: ua.deviceCategory,
-        browser: ua.browser,
-        os: ua.os,
-        firstVisit: now,
-        lastActivity: now,
-        currentPath: window.location.pathname || '/',
-        pageViews: 1,
-        status: 'active',
-        isLoggedIn: true,
-        loginType,
-        licenseCode: licenseCode || null,
-      });
+      await withTimeout(
+        setDoc(sessionRef, {
+          sessionId,
+          ip: ip || '127.0.0.1',
+          deviceCategory: ua.deviceCategory,
+          browser: ua.browser,
+          os: ua.os,
+          firstVisit: now,
+          lastActivity: now,
+          currentPath: window.location.pathname || '/',
+          pageViews: 1,
+          status: 'active',
+          isLoggedIn: true,
+          loginType,
+          licenseCode: licenseCode || null,
+        }),
+        2500
+      );
     }
   } catch (err) {
-    console.warn('[Record Login Firestore Sync Notice]:', err);
+    // Non-blocking offline resilience
   }
 }
 

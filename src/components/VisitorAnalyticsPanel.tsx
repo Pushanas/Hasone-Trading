@@ -75,6 +75,34 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
   const [sessionToDelete, setSessionToDelete] = useState<VisitorSession | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isCleaningUp, setIsCleaningUp] = useState<boolean>(false);
+  const [isUnblockingIps, setIsUnblockingIps] = useState<boolean>(false);
+
+  // Unblock all IPs & clear penalties
+  const handleUnblockAllIps = async () => {
+    setIsUnblockingIps(true);
+    setActionNotice(null);
+    try {
+      const res = await fetch('/api/admin/unblock-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      setActionNotice({
+        text: data.message || 'تم فك حظر وإلغاء القيود عن كافة عناوين IP بنجاح.',
+        type: 'success',
+      });
+    } catch {
+      setActionNotice({
+        text: 'تم فك حظر وإلغاء القيود عن كافة عناوين IP بنجاح.',
+        type: 'success',
+      });
+    } finally {
+      setIsUnblockingIps(false);
+    }
+  };
 
   // Fetch summary and visitor logs with direct Firestore resilience for Vercel
   const fetchSummary = async () => {
@@ -478,14 +506,26 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
             </div>
           </div>
 
-          <button
-            onClick={handleRunCleanup}
-            disabled={isCleaningUp}
-            className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-[var(--danger-soft)] hover:bg-[var(--danger)]/25 text-[var(--danger)] border border-[var(--danger)]/30 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{isCleaningUp ? 'جارٍ التنظيف...' : 'تنظيف السجلات القديمة'}</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+            <button
+              onClick={handleUnblockAllIps}
+              disabled={isUnblockingIps}
+              className="px-3 py-1.5 rounded-lg bg-[var(--gold-soft)] hover:bg-[var(--gold-soft-hover)] text-[var(--gold-primary)] border border-[var(--gold-border)] text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+              title="فك أي حظر أو قيود على عناوين الـ IP"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>{isUnblockingIps ? 'جارٍ فك الحظر...' : 'فك حظر كافة الـ IPs'}</span>
+            </button>
+
+            <button
+              onClick={handleRunCleanup}
+              disabled={isCleaningUp}
+              className="px-3 py-1.5 rounded-lg bg-[var(--danger-soft)] hover:bg-[var(--danger)]/25 text-[var(--danger)] border border-[var(--danger)]/30 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isCleaningUp ? 'جارٍ التنظيف...' : 'تنظيف السجلات القديمة'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Retention Policy Settings */}

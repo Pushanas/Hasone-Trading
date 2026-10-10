@@ -412,15 +412,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   const ip = getObservedPublicIp(req);
   const now = Date.now();
 
-  const ipRecord = failedAttemptsMap.get(ip) || { count: 0, lockedUntil: 0 };
-  if (ipRecord.lockedUntil > now) {
-    const secsLeft = Math.ceil((ipRecord.lockedUntil - now) / 1000);
-    return res.status(429).json({
-      success: false,
-      error: `تم حظر المحاولات مؤقتاً بسبب تكرار الأخطاء. انتظر ${secsLeft} ثانية.`,
-      lockedSeconds: secsLeft,
-    });
-  }
+  // All IP blocks and lockouts removed - unblocked completely per request
+  failedAttemptsMap.delete(ip);
 
   const inputSecret = String(password || code || '').trim();
   if (!inputSecret) {
@@ -539,21 +532,12 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 
   // C. Invalid credentials
-  ipRecord.count += 1;
-  if (ipRecord.count >= 5) {
-    const lockPenaltySecs = Math.min(300, 15 * Math.pow(2, ipRecord.count - 5));
-    ipRecord.lockedUntil = now + lockPenaltySecs * 1000;
-  }
-  failedAttemptsMap.set(ip, ipRecord);
-  const attemptsLeft = Math.max(0, 5 - ipRecord.count);
+  // All IPs unblocked - no lockout penalties
+  failedAttemptsMap.delete(ip);
 
   return res.status(401).json({
     success: false,
-    error:
-      attemptsLeft === 0
-        ? 'تم قفل المحاولات مؤقتاً لحماية منصة حسون Trading.'
-        : `كود التفعيل أو كلمة المرور غير صحيحة. متبقي ${attemptsLeft} محاولات.`,
-    attemptsLeft,
+    error: 'كود التفعيل أو كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى.',
   });
 });
 
@@ -840,6 +824,15 @@ app.post('/api/admin/delete-license', async (req: Request, res: Response) => {
   await removeLicense(code);
 
   return res.json({ success: true, message: 'تم حذف الكود نهائياً من قاعدة البيانات.' });
+});
+
+// 7.1 Unblock All IPs & Clear Lockouts
+app.post('/api/admin/unblock-all', (req: Request, res: Response) => {
+  failedAttemptsMap.clear();
+  return res.json({
+    success: true,
+    message: 'تم فك حظر وإلغاء القيود عن كافة عناوين IP بنجاح.',
+  });
 });
 
 // 8. Update Admin Password

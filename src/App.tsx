@@ -72,12 +72,15 @@ export default function App() {
   const lastBeepSecond = useRef<number>(-1);
   const lastActivityTime = useRef<number>(Date.now());
 
-  // Handle Authentication cleanup - erase all legacy pins, stale hashes, obsolete admin tokens, and created licenses
+  // Handle Authentication cleanup - erase all legacy pins, stale hashes, obsolete admin tokens, lockouts, and created licenses
   useEffect(() => {
     localStorage.removeItem('areen_custom_pin');
     localStorage.removeItem('areen_auth_salt');
     localStorage.removeItem('areen_auth_hash');
     localStorage.removeItem('hasone_admin_vault_v2');
+    sessionStorage.removeItem('areen_lockout_until');
+    localStorage.removeItem('areen_lockout_until');
+    sessionStorage.removeItem('hasone_cached_ip');
     clearAllCreatedLicenses();
   }, []);
 
