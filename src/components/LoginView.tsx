@@ -198,24 +198,49 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         </div>
 
-        {/* Subscription Link for @bker_38 */}
-        <div className="mt-6 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-center">
+        {/* Subscription & Creator Links */}
+        <div className="mt-6 pt-3.5 border-t border-[var(--border-subtle)] flex flex-col items-center gap-2">
+          {/* Subscription Link for @bker_38 */}
           <a
             href="https://t.me/bker_38"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--gold-border)]/40 hover:border-[var(--gold-primary)] text-[var(--text-secondary)] hover:text-[var(--gold-primary)] transition-all text-xs group shadow-xs cursor-pointer"
+            className="w-full inline-flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--gold-border)]/40 hover:border-[var(--gold-primary)] text-[var(--text-secondary)] hover:text-[var(--gold-primary)] transition-all text-xs group shadow-xs cursor-pointer"
           >
-            <div className="w-5 h-5 rounded-full bg-[var(--accent-burgundy)] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5 fill-current">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.88 7.99-3.44 3.82-1.6 4.61-1.88 5.13-1.89.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.13-.04.22z" />
-              </svg>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-[var(--accent-burgundy)] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5 fill-current">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.88 7.99-3.44 3.82-1.6 4.61-1.88 5.13-1.89.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.13-.04.22z" />
+                </svg>
+              </div>
+              <span className="text-[11px] text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">
+                للاشتراك:
+              </span>
             </div>
-            <span className="text-[11px] text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">
-              للاشتراك:
-            </span>
             <span className="font-mono font-bold text-[var(--gold-primary)]" dir="ltr">
               @bker_38
+            </span>
+          </a>
+
+          {/* Creator & Developer Link for @QV_CODE */}
+          <a
+            href="https://t.me/QV_CODE"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full inline-flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-cyan-500/30 hover:border-cyan-400 text-[var(--text-secondary)] hover:text-cyan-400 transition-all text-xs group shadow-xs cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-600 to-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5 fill-current">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.88 7.99-3.44 3.82-1.6 4.61-1.88 5.13-1.89.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.13-.04.22z" />
+                </svg>
+              </div>
+              <span className="text-[11px] text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">
+                المنشئ والمطور:
+              </span>
+            </div>
+            <span className="font-mono font-bold text-cyan-400 group-hover:text-cyan-300" dir="ltr">
+              @QV_CODE
             </span>
           </a>
         </div>
