@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
@@ -15,6 +16,13 @@ import {
   deleteDoc,
   setLogLevel,
 } from 'firebase/firestore';
+import { HASONE_CURRENCY_PAIRS } from './src/constants/hasonePairs';
+import { runHasoneAnalysis, fetchPairData } from './src/utils/hasoneEngine';
+import apiProxyRouter from './backend/src/middleware/apiProxy.js';
+import tradesRouter from './backend/src/routes/tradesRouter.js';
+import pairsRouter from './backend/src/routes/pairs';
+import analyzeRouter from './backend/src/routes/analyze';
+import statsRouter from './backend/src/routes/stats';
 
 // Suppress benign internal gRPC idle stream disconnect warnings
 setLogLevel('error');
@@ -1285,6 +1293,316 @@ app.get('/api/quotex/live-rates', (_req: Request, res: Response) => {
   });
 });
 
+// Twelve Data Sanitized Proxy Route
+app.use('/api/proxy/twelvedata', apiProxyRouter);
+
+// Enterprise Database & Trade Tracking Routes
+app.use('/api/trades', tradesRouter);
+app.use('/api/app-settings', tradesRouter);
+
+// Enterprise Modular v2 API Routes
+app.use('/api/v2/pairs', pairsRouter);
+app.use('/api/v2/analyze', analyzeRouter);
+app.use('/api/v2/stats', statsRouter);
+
+// Helper functions for Twelve Data credentials and masking
+function getTwelveDataApiKey(): string {
+  return process.env.TWELVE_DATA_API_KEY || '50afb2495f3e4384a3fea5960a7a202e';
+}
+
+function maskApiKey(key: string): string {
+  if (!key || key.length < 8) return '****';
+  return `${key.slice(0, 6)}...${key.slice(-4)} (الطول: ${key.length} حرف)`;
+}
+
+// Server-side cache for Twelve Data to strictly respect the 8 credits/min plan limit
+interface ServerCandleCacheItem {
+  candles: any[];
+  price: number;
+  timestamp: number;
+  creditsLeft: number | null;
+  meta: any;
+}
+const serverCandleCache = new Map<string, ServerCandleCacheItem>();
+
+// Dedicated Twelve Data Candles Proxy with Backend Logging & Rate Protection
+app.get('/api/market/twelvedata-candles', async (req: Request, res: Response) => {
+  const symbol = String(req.query.symbol || 'EUR/USD').trim();
+  const rawInterval = String(req.query.interval || '1min').trim();
+  const interval = rawInterval === '1m' ? '1min' : rawInterval === '5m' ? '5min' : rawInterval === '15m' ? '15min' : rawInterval;
+  const count = parseInt(String(req.query.outputsize || '30'), 10) || 30;
+
+  const cacheKey = `${symbol}_${interval}_${count}`;
+  const cached = serverCandleCache.get(cacheKey);
+
+  // 20s TTL cache prevents burning the 8 credits/min limit across multiple UI/bot requests
+  if (cached && Date.now() - cached.timestamp < 20000) {
+    console.log(`[TwelveData Backend] <--- ذاكرة مؤقتة نشطة (Cache Hit) لـ ${symbol} (${interval}) - تم توفير رصيد API.`);
+    return res.json({
+      success: true,
+      cached: true,
+      symbol,
+      interval,
+      livePrice: cached.price,
+      candles: cached.candles,
+      meta: cached.meta,
+      creditsLeft: cached.creditsLeft,
+      isRealApi: true,
+    });
+  }
+
+  const apiKey = getTwelveDataApiKey();
+  const masked = maskApiKey(apiKey);
+  console.log(`[TwelveData Backend] ---> طلب بيانات حية: رمز=${symbol} | فاصل=${interval} | عدد=${count} | المفتاح=${masked}`);
+
+  const t0 = Date.now();
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(
+      symbol
+    )}&interval=${interval}&outputsize=${count}&apikey=${apiKey}`;
+
+    const tdRes = await fetch(url, { signal: AbortSignal.timeout(6500) });
+    const latency = Date.now() - t0;
+    const httpStatus = tdRes.status;
+    const creditsLeftHeader = tdRes.headers.get('api-credits-left');
+    const creditsLeft = creditsLeftHeader !== null ? parseInt(creditsLeftHeader, 10) : null;
+
+    const data = await tdRes.json();
+
+    console.log(
+      `[TwelveData Backend] <--- استجابة المزود: HTTP ${httpStatus} (${latency}ms) | الرصيد المتبقي: ${creditsLeft ?? 'غير محدد'} | الحالة: ${data.status}`
+    );
+
+    if (!tdRes.ok || data.status === 'error') {
+      const errorMsg = data.message || `HTTP ${httpStatus} Error`;
+      console.error(
+        `[TwelveData Backend خطأ] فشل جلب البيانات: HTTP ${httpStatus} | الرسالة: ${errorMsg}`
+      );
+      return res.status(httpStatus >= 400 ? httpStatus : 502).json({
+        success: false,
+        httpStatus,
+        error: errorMsg,
+        creditsLeft,
+        isRealApi: false,
+      });
+    }
+
+    if (Array.isArray(data.values) && data.values.length > 0) {
+      const candles = data.values
+        .map((v: any) => ({
+          timestamp: new Date(v.datetime).getTime(),
+          timeStr: v.datetime,
+          open: parseFloat(v.open),
+          high: parseFloat(v.high),
+          low: parseFloat(v.low),
+          close: parseFloat(v.close),
+          volume: v.volume ? parseFloat(v.volume) : 0,
+        }))
+        .reverse();
+
+      const livePrice = candles[candles.length - 1].close;
+
+      serverCandleCache.set(cacheKey, {
+        candles,
+        price: livePrice,
+        timestamp: Date.now(),
+        creditsLeft,
+        meta: data.meta,
+      });
+
+      console.log(
+        `[TwelveData Backend نجاح] تم جلب ${candles.length} شمعة فعلية لـ ${symbol} بنجاح. السعر الحالي: ${livePrice}`
+      );
+
+      return res.json({
+        success: true,
+        cached: false,
+        symbol,
+        interval,
+        livePrice,
+        candles,
+        meta: data.meta,
+        creditsLeft,
+        isRealApi: true,
+      });
+    }
+
+    return res.status(502).json({
+      success: false,
+      error: 'لم يتم العثور على شموع في رد المزود',
+      isRealApi: false,
+    });
+  } catch (err: any) {
+    console.error(`[TwelveData Backend خطأ شبكة/مهلة]:`, err.message);
+    return res.status(504).json({
+      success: false,
+      httpStatus: 504,
+      error: `انتهت مهلة الاتصال بمزود البيانات أو حدث خطأ شبكة: ${err.message}`,
+      isRealApi: false,
+    });
+  }
+});
+
+// Direct Diagnostics & Integration Testing Endpoint for Twelve Data
+app.get('/api/market/twelvedata-test', async (_req: Request, res: Response) => {
+  const apiKey = getTwelveDataApiKey();
+  const hasEnvKey = Boolean(process.env.TWELVE_DATA_API_KEY);
+  const maskedKey = maskApiKey(apiKey);
+
+  console.log(`[TwelveData Diagnostics] ---> بدء فحص الاتصال الحي لـ EUR/USD (فاصل 1min)...`);
+  console.log(`[TwelveData Diagnostics] المفتاح من البيئة (Env): ${hasEnvKey ? 'نعم' : 'لا (افتراضي)'} | المفتاح المقنع: ${maskedKey}`);
+
+  const t0 = Date.now();
+  let httpStatus = 0;
+  let creditsLeft: number | null = null;
+  let creditsUsed: number | null = null;
+  let testResponse: any = null;
+  let usageData: any = null;
+  let errorMsg: string | null = null;
+
+  // 1. Test time_series for EUR/USD with 1min interval
+  try {
+    const testUrl = `https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1min&outputsize=5&apikey=${apiKey}`;
+    const testRes = await fetch(testUrl, { signal: AbortSignal.timeout(6000) });
+    httpStatus = testRes.status;
+
+    const cLeft = testRes.headers.get('api-credits-left');
+    const cUsed = testRes.headers.get('api-credits-used');
+    creditsLeft = cLeft ? parseInt(cLeft, 10) : null;
+    creditsUsed = cUsed ? parseInt(cUsed, 10) : null;
+
+    testResponse = await testRes.json();
+    const duration = Date.now() - t0;
+
+    console.log(
+      `[TwelveData Diagnostics] <--- استجابة فحص الشموع: HTTP ${httpStatus} (${duration}ms) | credits-left: ${cLeft} | status: ${testResponse?.status}`
+    );
+
+    if (!testRes.ok || testResponse?.status === 'error') {
+      errorMsg = testResponse?.message || `HTTP ${httpStatus} Error`;
+      console.error(`[TwelveData Diagnostics خطأ]: ${errorMsg}`);
+    }
+  } catch (err: any) {
+    httpStatus = 504;
+    errorMsg = `مهلة الاتصال أو خطأ بالشبكة: ${err.message}`;
+    console.error(`[TwelveData Diagnostics خطأ اتصال]: ${errorMsg}`);
+  }
+
+  // 2. Query api_usage for limits and quota
+  try {
+    const usageRes = await fetch(`https://api.twelvedata.com/api_usage?apikey=${apiKey}`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (usageRes.ok) {
+      usageData = await usageRes.json();
+      console.log(
+        `[TwelveData Diagnostics] <--- بيانات الخطة: فئة=${usageData?.plan_category} | حد الدقيقة=${usageData?.plan_limit} | استخدام اليوم=${usageData?.daily_usage}/${usageData?.plan_daily_limit}`
+      );
+    }
+  } catch {
+    // Non-critical
+  }
+
+  const isSuccess = httpStatus === 200 && testResponse?.status === 'ok';
+
+  return res.json({
+    success: isSuccess,
+    testedAt: new Date().toISOString(),
+    environment: {
+      hasEnvKey,
+      keyMasked: maskedKey,
+    },
+    testRequest: {
+      symbol: 'EUR/USD',
+      interval: '1min',
+      outputsize: 5,
+    },
+    testResult: {
+      httpStatus,
+      durationMs: Date.now() - t0,
+      creditsLeft,
+      creditsUsed,
+      providerStatus: testResponse?.status || 'unknown',
+      errorMessage: errorMsg,
+      returnedCandlesCount: Array.isArray(testResponse?.values) ? testResponse.values.length : 0,
+      latestCandle: Array.isArray(testResponse?.values) && testResponse.values.length > 0 ? testResponse.values[0] : null,
+      isRealApi: isSuccess,
+    },
+    planLimits: usageData || {
+      plan_category: 'basic',
+      plan_limit: 8,
+      plan_daily_limit: 800,
+    },
+  });
+});
+
+// Real-time Data Providers Verification endpoint (Twelve Data API + Quotex OTC Gateway)
+app.get('/api/market/verify-connections', async (_req: Request, res: Response) => {
+  const t0 = Date.now();
+  let twelveDataStatus = 'DISCONNECTED';
+  let twelveDataLatency = 0;
+  let twelveDataPrice: string | null = null;
+  let twelveDataError: string | null = null;
+  const apiKey = getTwelveDataApiKey();
+
+  try {
+    const tdRes = await fetch(
+      `https://api.twelvedata.com/price?symbol=EUR/USD&apikey=${apiKey}`,
+      { signal: AbortSignal.timeout(4500) }
+    );
+    twelveDataLatency = Date.now() - t0;
+    if (tdRes.ok) {
+      const tdData = await tdRes.json();
+      if (tdData && tdData.price) {
+        twelveDataStatus = 'CONNECTED_OK';
+        twelveDataPrice = tdData.price;
+      } else {
+        twelveDataStatus = 'CONNECTED_WARNING';
+        twelveDataError = tdData.message || 'No price field';
+      }
+    } else {
+      twelveDataStatus = `HTTP_${tdRes.status}`;
+      twelveDataError = `HTTP ${tdRes.status}`;
+    }
+  } catch (err: any) {
+    twelveDataStatus = 'ERROR';
+    twelveDataError = err.message || 'Timeout/Network error';
+  }
+
+  const quotexStatus = quotexLiveState.lastUpdated > 0 ? 'CONNECTED_ACTIVE' : 'INITIALIZING';
+
+  return res.json({
+    success: true,
+    timestamp: Date.now(),
+    overallStatus: twelveDataStatus === 'CONNECTED_OK' ? '100% OPERATIONAL' : 'DEGRADED',
+    twelveData: {
+      provider: 'Twelve Data Global Markets API',
+      status: twelveDataStatus,
+      latencyMs: twelveDataLatency,
+      apiKeyActive: Boolean(apiKey),
+      apiKeyMasked: maskApiKey(apiKey),
+      testPair: 'EUR/USD',
+      livePrice: twelveDataPrice,
+      error: twelveDataError,
+      websocketEndpoint: 'wss://ws.twelvedata.com/v1/quotes/price',
+    },
+    quotexOtc: {
+      provider: 'Quotex OTC WebSocket Gateway',
+      status: quotexStatus,
+      lastRatesUpdate: quotexLiveState.lastUpdated,
+      totalActivePairs: Object.keys(quotexLiveState.rates).length,
+      sampleRates: {
+        'EUR/USD OTC': quotexLiveState.rates.eur_usd_otc,
+        'USD/BRL OTC': quotexLiveState.rates.usd_brl_otc,
+        'USD/MXN OTC': quotexLiveState.rates.usd_mxn_otc,
+        'USD/INR OTC': quotexLiveState.rates.usd_inr_otc,
+        'USD/ARS OTC': quotexLiveState.rates.usd_ars_otc,
+      },
+    },
+  });
+});
+
+
 // Endpoint for live OHLC candles
 app.get('/api/quotex/candles', (req: Request, res: Response) => {
   const pairId = String(req.query.pairId || 'usd_brl_otc');
@@ -1370,6 +1688,188 @@ Return ONLY valid JSON in this exact structure:
       source: 'quotex_quant_engine',
     });
   }
+});
+
+// ================= HASONE TRADING API SUITE =================
+// In-memory trade signal records and settings
+const hasoneSignalsStore: any[] = [];
+let hasoneSettingsStore = {
+  paperMode: true,
+  soundEnabled: true,
+  minScoreThreshold: 70,
+  candleCount: 85,
+  selectedDataSource: 'auto',
+  favoritePairs: ['eur_usd_otc', 'usd_brl_otc', 'gbp_usd_otc', 'usd_inr_otc', 'usd_jpy_otc'],
+};
+
+// 1. Health Endpoint
+app.get('/api/health', (_req: Request, res: Response) => {
+  return res.json({
+    status: 'ok',
+    serverTime: Date.now(),
+    service: 'Hasone Trading Engine',
+    provider: 'Twelve Data API & Quotex OTC Stream',
+    version: '3.0.0',
+  });
+});
+
+// 2. Pairs Endpoint
+app.get('/api/pairs', (req: Request, res: Response) => {
+  const category = req.query.category as string;
+  let pairs = [...HASONE_CURRENCY_PAIRS];
+  if (category && category !== 'all') {
+    pairs = pairs.filter((p) => p.category === category);
+  }
+  return res.json({
+    success: true,
+    total: pairs.length,
+    pairs,
+  });
+});
+
+// 3. Categories Endpoint
+app.get('/api/pairs/categories', (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    categories: [
+      { id: 'all', name: 'الكل' },
+      { id: 'major', name: 'العملات الرئيسية' },
+      { id: 'minor', name: 'العملات الثانوية' },
+      { id: 'otc', name: 'أزواج OTC' },
+      { id: 'exotic', name: 'أزواج العملات الثانية (BRL/TRY/MXN)' },
+      { id: 'favorites', name: 'المفضلة' },
+    ],
+  });
+});
+
+// 4. Candles Endpoint
+app.get('/api/candles', async (req: Request, res: Response) => {
+  try {
+    const pairId = (req.query.pair as string) || 'eur_usd_otc';
+    const timeframe = (req.query.timeframe as string) || '1min';
+    const limit = parseInt((req.query.limit as string) || '80', 10);
+    const pair = HASONE_CURRENCY_PAIRS.find((p) => p.id === pairId) || HASONE_CURRENCY_PAIRS[0];
+
+    const data = await fetchPairData(pair, timeframe, limit);
+    return res.json({
+      success: true,
+      pair: pair.symbol,
+      timeframe,
+      dataSource: data.dataSource,
+      isRealApi: data.isRealApi,
+      candles: data.candles,
+      livePrice: data.livePrice,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'فشل جلب الشموع' });
+  }
+});
+
+// 5. Live Price Endpoint
+app.get('/api/price', async (req: Request, res: Response) => {
+  try {
+    const pairId = (req.query.pair as string) || 'eur_usd_otc';
+    const pair = HASONE_CURRENCY_PAIRS.find((p) => p.id === pairId) || HASONE_CURRENCY_PAIRS[0];
+    const data = await fetchPairData(pair, '1min', 5);
+    return res.json({
+      success: true,
+      pair: pair.symbol,
+      price: data.livePrice,
+      dataSource: data.dataSource,
+      timestamp: Date.now(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'فشل جلب السعر' });
+  }
+});
+
+// 6. Manual Analysis Endpoint
+app.post('/api/analyze', async (req: Request, res: Response) => {
+  try {
+    const { pair: pairId, duration, timeframe } = req.body;
+    const cleanPairId = String(pairId || 'eur_usd_otc');
+    const cleanDuration = String(duration || '1m');
+
+    const result = await runHasoneAnalysis(cleanPairId, cleanDuration);
+    return res.json({
+      success: true,
+      ...result,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: 'حدث خطأ في محرك التحليل الفني: ' + (err.message || 'يرجى إعادة المحاولة'),
+    });
+  }
+});
+
+// 7. Signals History
+app.get('/api/signals', (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    total: hasoneSignalsStore.length,
+    signals: hasoneSignalsStore,
+  });
+});
+
+app.post('/api/signals', (req: Request, res: Response) => {
+  const signal = req.body;
+  if (!signal || !signal.id) {
+    return res.status(400).json({ success: false, error: 'بيانات الإشارة غير مكتملة' });
+  }
+  hasoneSignalsStore.unshift(signal);
+  if (hasoneSignalsStore.length > 300) hasoneSignalsStore.pop();
+  return res.json({ success: true, signal });
+});
+
+// 8. Update Signal Result
+app.patch('/api/signals/:id/result', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { result, exitPrice, profitPips } = req.body;
+
+  const idx = hasoneSignalsStore.findIndex((s) => s.id === id);
+  if (idx !== -1) {
+    hasoneSignalsStore[idx].result = result;
+    hasoneSignalsStore[idx].exitPrice = exitPrice;
+    hasoneSignalsStore[idx].profitPips = profitPips;
+    hasoneSignalsStore[idx].settledAt = Date.now();
+    return res.json({ success: true, signal: hasoneSignalsStore[idx] });
+  }
+  return res.status(404).json({ success: false, error: 'الإشارة غير موجودة' });
+});
+
+// 9. Stats Endpoint
+app.get('/api/stats', (_req: Request, res: Response) => {
+  const valid = hasoneSignalsStore.filter((s) => s.result === 'WIN' || s.result === 'LOSS');
+  const wins = valid.filter((s) => s.result === 'WIN').length;
+  const losses = valid.filter((s) => s.result === 'LOSS').length;
+  const total = valid.length;
+  const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
+
+  return res.json({
+    success: true,
+    stats: {
+      totalSignals: total,
+      wins,
+      losses,
+      draws: hasoneSignalsStore.filter((s) => s.result === 'DRAW').length,
+      winRate,
+      bestCategory: 'أزواج OTC',
+    },
+  });
+});
+
+// 10. Settings Endpoints
+app.get('/api/settings', (_req: Request, res: Response) => {
+  return res.json({ success: true, settings: hasoneSettingsStore });
+});
+
+app.post('/api/settings', (req: Request, res: Response) => {
+  const { settings } = req.body;
+  if (settings) {
+    hasoneSettingsStore = { ...hasoneSettingsStore, ...settings };
+  }
+  return res.json({ success: true, settings: hasoneSettingsStore });
 });
 
 // Mount Vite or static build

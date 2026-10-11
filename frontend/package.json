@@ -1,0 +1,23 @@
+{
+  "name": "hasone-trading-frontend",
+  "version": "1.0.0",
+  "description": "Enterprise UI Dashboard for Hasone Trading Platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "recharts": "^2.15.0",
+    "zustand": "^5.0.0",
+    "lucide-react": "^0.546.0",
+    "framer-motion": "^12.0.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.0",
+    "date-fns": "^4.1.0"
+  }
+}

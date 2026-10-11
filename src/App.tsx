@@ -406,14 +406,18 @@ export default function App() {
     .filter((s, idx) => idx > currentSignalIndex && !s.done)
     .slice(0, 3);
 
+  const isWideWorkspace = activeTab === 'analyzer' || activeTab === 'table' || activeTab === 'collection';
+
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex justify-center selection:bg-[var(--gold-primary)]/25 selection:text-[var(--gold-light)]">
-      {/* Container Frame matching phone ergonomics with responsive padding */}
-      <div className="w-full max-w-[490px] sm:max-w-xl min-h-screen bg-[var(--bg-base)] border-x border-[var(--border-subtle)] shadow-[0_0_90px_rgba(0,0,0,0.85)] flex flex-col relative pb-20 sm:pb-24">
-        {/* Top Header with logo on Right and controls on Left */}
+      {/* Container Frame matching phone ergonomics on mobile, and expanding to full SaaS workstation on desktop */}
+      <div className={`w-full ${isWideWorkspace ? 'max-w-7xl' : 'max-w-xl md:max-w-4xl'} min-h-screen bg-[var(--bg-base)] border-x border-[var(--border-subtle)] shadow-[0_0_90px_rgba(0,0,0,0.85)] flex flex-col relative pb-20 sm:pb-24 transition-all duration-300`}>
+        {/* Top Header with logo on Right, desktop tabs in center, and controls on Left */}
         <Header
           onLockSession={handleLockSession}
           onSecretTrigger={() => setIsAdminAuthOpen(true)}
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
         />
 
         {/* Content Container */}

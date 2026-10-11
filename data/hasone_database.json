@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "schemaCreated": "2026-10-11T10:31:14.399Z",
+  "lastUpdated": "2026-10-11T10:31:22.134Z",
+  "settings": {
+    "paperMode": true,
+    "soundEnabled": true,
+    "minScoreThreshold": 70,
+    "candleCount": 85,
+    "selectedDataSource": "auto",
+    "favoritePairs": [
+      "eur_usd_otc",
+      "usd_brl_otc",
+      "gbp_usd_otc",
+      "usd_inr_otc",
+      "usd_jpy_otc"
+    ]
+  },
+  "trades": [
+    {
+      "id": "trade_1791714682127_d71ee2",
+      "pairId": "eur_usd",
+      "pairSymbol": "EUR/USD",
+      "pairDisplayName": "اليورو / الدولار الأمريكي",
+      "category": "major",
+      "isOTC": false,
+      "signalType": "CALL",
+      "entryTime": "10:31",
+      "entryTimestamp": 1791714682127,
+      "durationStr": "1m",
+      "durationMinutes": 1,
+      "expiryTimestamp": 1791714742127,
+      "entryPrice": 1.1204,
+      "exitPrice": 1.12052,
+      "result": "WIN",
+      "profitPips": 1.2,
+      "strength": 88,
+      "confidence": "عالية",
+      "riskLevel": "منخفضة",
+      "reason": "",
+      "marketCondition": "",
+      "dataSource": "Twelve Data API (بيانات حية مباشرة)",
+      "isPaper": true,
+      "createdAt": 1791714682127,
+      "settledAt": 1791714682134
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log_1791714682115_3f9dfb",
+      "action": "DATABASE_BACKUP_CREATED",
+      "actor": "system",
+      "details": {
+        "fileName": "hasone_backup_2026-10-11T10-31-22-115Z_qa_verification.json",
+        "reason": "qa_verification"
+      },
+      "timestamp": "2026-10-11T10:31:22.115Z"
+    }
+  ],
+  "backups": []
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "schemaCreated": "2026-10-11T10:31:14.399Z",
+  "lastUpdated": "2026-10-11T10:31:14.400Z",
+  "settings": {
+    "paperMode": true,
+    "soundEnabled": true,
+    "minScoreThreshold": 70,
+    "candleCount": 85,
+    "selectedDataSource": "auto",
+    "favoritePairs": [
+      "eur_usd_otc",
+      "usd_brl_otc",
+      "gbp_usd_otc",
+      "usd_inr_otc",
+      "usd_jpy_otc"
+    ]
+  },
+  "trades": [],
+  "auditLogs": [],
+  "backups": []
+}

@@ -40,15 +40,15 @@ export const MagicNavigationBar: React.FC<MagicNavigationBarProps> = ({
           <span className="nav-label">المولّد</span>
         </button>
 
-        {/* Tab 3: Quotex AI Analyzer (بوت كوتكس) */}
+        {/* Tab 3: Hasone Trading Analyzer (محلل Hasone) */}
         <button
           type="button"
           onClick={() => onChangeTab('analyzer')}
           className={`nav-item ${activeTab === 'analyzer' ? 'active' : ''}`}
-          aria-label="محلل كوتكس"
+          aria-label="محلل Hasone"
         >
           <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
-          <span className="nav-label">محلل كوتكس</span>
+          <span className="nav-label">محلل Hasone</span>
         </button>
 
         {/* Center Floating Button (.profile): Strategy (استراتيجيات حسون - Trading) */}
