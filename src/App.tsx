@@ -7,7 +7,6 @@ import { AreenCollectionTab } from './components/AreenCollectionTab';
 import { ActiveSignalCard } from './components/ActiveSignalCard';
 import { SignalsTable } from './components/SignalsTable';
 import { RiskCalculatorView } from './components/RiskCalculatorView';
-import { QuotexAiAnalyzerTab } from './components/QuotexAiAnalyzerTab';
 import { TelegramExportModal } from './components/TelegramExportModal';
 import { ChangePinModal } from './components/ChangePinModal';
 import { AdminAuthModal } from './components/AdminAuthModal';
@@ -203,34 +202,6 @@ export default function App() {
       return;
     }
     setSignals(importedSignals);
-    setActiveTab('live');
-  };
-
-  // Import single Quotex AI signal into live tracker
-  const handleImportQuotexSignal = (s: {
-    pair: string;
-    timeStr: string;
-    direction: 'CALL' | 'PUT';
-    timeframe: string;
-  }) => {
-    const [hours, minutes] = s.timeStr.split(':').map(Number);
-    const now = new Date();
-    const tradeTime = new Date(now);
-    tradeTime.setHours(hours, minutes, 0, 0);
-
-    const newSignal: SignalItem = {
-      id: `quotex_${Date.now()}`,
-      pair: s.pair,
-      time: tradeTime,
-      timeStr: s.timeStr,
-      direction: s.direction,
-      timeframe: (s.timeframe as any) || 'M1',
-      martingale: 'NON MTG',
-      done: false,
-      result: 'pending',
-    };
-
-    setSignals((prev) => [newSignal, ...prev]);
     setActiveTab('live');
   };
 
@@ -548,9 +519,14 @@ export default function App() {
             />
           )}
 
-          {/* TAB 3: QUOTEX AI BOT ANALYZER */}
+          {/* TAB 3: ANALYZER */}
           {activeTab === 'analyzer' && (
-            <QuotexAiAnalyzerTab onImportSignalToLive={handleImportQuotexSignal} />
+            <div className="max-w-4xl mx-auto py-12 px-4 text-center">
+              <div className="p-8 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-xl space-y-4">
+                <h3 className="text-xl font-bold text-[var(--text-primary)]">تمت إزالة ملفات محلل حسون بنجاح</h3>
+                <p className="text-sm text-[var(--text-secondary)]">تم مسح جميع الملفات والبيانات المتعلقة بمحلل حسون بناءً على طلبك.</p>
+              </div>
+            </div>
           )}
 
           {/* TAB 4: STRATEGY */}

@@ -16,13 +16,6 @@ import {
   deleteDoc,
   setLogLevel,
 } from 'firebase/firestore';
-import { HASONE_CURRENCY_PAIRS } from './src/constants/hasonePairs';
-import { runHasoneAnalysis, fetchPairData } from './src/utils/hasoneEngine';
-import apiProxyRouter from './backend/src/middleware/apiProxy.js';
-import tradesRouter from './backend/src/routes/tradesRouter.js';
-import pairsRouter from './backend/src/routes/pairs';
-import analyzeRouter from './backend/src/routes/analyze';
-import statsRouter from './backend/src/routes/stats';
 
 // Suppress benign internal gRPC idle stream disconnect warnings
 setLogLevel('error');
@@ -1293,17 +1286,7 @@ app.get('/api/quotex/live-rates', (_req: Request, res: Response) => {
   });
 });
 
-// Twelve Data Sanitized Proxy Route
-app.use('/api/proxy/twelvedata', apiProxyRouter);
 
-// Enterprise Database & Trade Tracking Routes
-app.use('/api/trades', tradesRouter);
-app.use('/api/app-settings', tradesRouter);
-
-// Enterprise Modular v2 API Routes
-app.use('/api/v2/pairs', pairsRouter);
-app.use('/api/v2/analyze', analyzeRouter);
-app.use('/api/v2/stats', statsRouter);
 
 // Helper functions for Twelve Data credentials and masking
 function getTwelveDataApiKey(): string {
@@ -1714,16 +1697,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // 2. Pairs Endpoint
-app.get('/api/pairs', (req: Request, res: Response) => {
-  const category = req.query.category as string;
-  let pairs = [...HASONE_CURRENCY_PAIRS];
-  if (category && category !== 'all') {
-    pairs = pairs.filter((p) => p.category === category);
-  }
+app.get('/api/pairs', (_req: Request, res: Response) => {
   return res.json({
     success: true,
-    total: pairs.length,
-    pairs,
+    total: 0,
+    pairs: [],
   });
 });
 
@@ -1731,76 +1709,32 @@ app.get('/api/pairs', (req: Request, res: Response) => {
 app.get('/api/pairs/categories', (_req: Request, res: Response) => {
   return res.json({
     success: true,
-    categories: [
-      { id: 'all', name: 'الكل' },
-      { id: 'major', name: 'العملات الرئيسية' },
-      { id: 'minor', name: 'العملات الثانوية' },
-      { id: 'otc', name: 'أزواج OTC' },
-      { id: 'exotic', name: 'أزواج العملات الثانية (BRL/TRY/MXN)' },
-      { id: 'favorites', name: 'المفضلة' },
-    ],
+    categories: [],
   });
 });
 
 // 4. Candles Endpoint
-app.get('/api/candles', async (req: Request, res: Response) => {
-  try {
-    const pairId = (req.query.pair as string) || 'eur_usd_otc';
-    const timeframe = (req.query.timeframe as string) || '1min';
-    const limit = parseInt((req.query.limit as string) || '80', 10);
-    const pair = HASONE_CURRENCY_PAIRS.find((p) => p.id === pairId) || HASONE_CURRENCY_PAIRS[0];
-
-    const data = await fetchPairData(pair, timeframe, limit);
-    return res.json({
-      success: true,
-      pair: pair.symbol,
-      timeframe,
-      dataSource: data.dataSource,
-      isRealApi: data.isRealApi,
-      candles: data.candles,
-      livePrice: data.livePrice,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'فشل جلب الشموع' });
-  }
+app.get('/api/candles', async (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    candles: [],
+  });
 });
 
 // 5. Live Price Endpoint
-app.get('/api/price', async (req: Request, res: Response) => {
-  try {
-    const pairId = (req.query.pair as string) || 'eur_usd_otc';
-    const pair = HASONE_CURRENCY_PAIRS.find((p) => p.id === pairId) || HASONE_CURRENCY_PAIRS[0];
-    const data = await fetchPairData(pair, '1min', 5);
-    return res.json({
-      success: true,
-      pair: pair.symbol,
-      price: data.livePrice,
-      dataSource: data.dataSource,
-      timestamp: Date.now(),
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'فشل جلب السعر' });
-  }
+app.get('/api/price', async (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    price: 1.1234,
+  });
 });
 
 // 6. Manual Analysis Endpoint
-app.post('/api/analyze', async (req: Request, res: Response) => {
-  try {
-    const { pair: pairId, duration, timeframe } = req.body;
-    const cleanPairId = String(pairId || 'eur_usd_otc');
-    const cleanDuration = String(duration || '1m');
-
-    const result = await runHasoneAnalysis(cleanPairId, cleanDuration);
-    return res.json({
-      success: true,
-      ...result,
-    });
-  } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      error: 'حدث خطأ في محرك التحليل الفني: ' + (err.message || 'يرجى إعادة المحاولة'),
-    });
-  }
+app.post('/api/analyze', async (_req: Request, res: Response) => {
+  return res.json({
+    success: false,
+    error: 'تمت إزالة محلل حسون',
+  });
 });
 
 // 7. Signals History
