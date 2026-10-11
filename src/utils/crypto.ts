@@ -3,8 +3,8 @@ import { clientVerifyLicense } from './clientLicenseEngine';
 import { recordVisitorLogin } from './visitorTracker';
 
 const DEFAULT_VAULT = {
-  saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
-  hashB64: 'oL/YQjYZMcrZh5BiQPsoBh1pVBJF7HIcHHjNyP+yKqQ=',
+  saltB64: 'CJmB+8Vtq0YzoRSMMt5H0w==', // Hasone@Trading#2026!Pro
+  hashB64: 'HAwvf1EVzwY1kBwsw2Uehp1muICCCGefVsUpeBe9iq8=',
   iterations: 210000,
 };
 

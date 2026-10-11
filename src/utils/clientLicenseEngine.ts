@@ -29,8 +29,8 @@ const ADMIN_VAULT_KEY = 'hasone_admin_vault_v2';
 
 const SEED_LICENSES: LicenseRecord[] = [];
 
-// Official admin pass: Hasone@Admin#7744!Vault
-const DEFAULT_ADMIN_HASH = 'Hasone@Admin#7744!Vault';
+// Official admin pass: Hasone@Master#8855!Core
+const DEFAULT_ADMIN_HASH = 'Hasone@Master#8855!Core';
 
 /**
  * Retrieves client IP using high-speed public endpoint with instant fallback.
@@ -264,10 +264,7 @@ export function clearAllCreatedLicenses(): void {
  */
 export function clientVerifyAdminPassword(password: string): boolean {
   const clean = password.trim();
-  if (clean.toLowerCase() === 'hasone#admin9481!vip' || clean.toLowerCase() === 'hasone#2026!vip') {
-    return false;
-  }
-  return clean === 'Hasone@Admin#7744!Vault';
+  return clean === 'Hasone@Master#8855!Core';
 }
 
 /**

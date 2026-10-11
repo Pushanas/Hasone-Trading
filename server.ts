@@ -96,12 +96,12 @@ export interface VisitorSessionRecord {
 
 // Initial Default Vault configuration with ultra-secure Bot and Admin Passwords
 const INITIAL_VAULT: VaultData = {
-  saltB64: 'XFn6yVAjr+8DO4ftSFreoA==', // Hasone@Bot#9988!Secure
-  hashB64: 'oL/YQjYZMcrZh5BiQPsoBh1pVBJF7HIcHHjNyP+yKqQ=',
+  saltB64: 'CJmB+8Vtq0YzoRSMMt5H0w==', // Hasone@Trading#2026!Pro
+  hashB64: 'HAwvf1EVzwY1kBwsw2Uehp1muICCCGefVsUpeBe9iq8=',
   iterations: 210000,
-  sessionVersion: `epoch_${Date.now()}_exclusive_master_bot9988_active`,
-  adminSaltB64: 'UfZXfwImn1eQcdiei2ddqA==', // Hasone@Admin#7744!Vault
-  adminHashB64: '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=',
+  sessionVersion: `epoch_${Date.now()}_trading2026pro`,
+  adminSaltB64: 'Dj1rfFZQNiGlHz2MwHCwyQ==', // Hasone@Master#8855!Core
+  adminHashB64: '+nk399sUdfI2UYBPn2rr362vzDBaA0mJML6vkE9IUXU=',
   updatedAt: new Date().toISOString(),
 };
 
@@ -293,8 +293,8 @@ function verifyAdminPasswordAgainstVault(password: string, vault: VaultData): bo
       return false;
     }
 
-    const saltB64 = vault.adminSaltB64 || 'UfZXfwImn1eQcdiei2ddqA==';
-    const hashB64 = vault.adminHashB64 || '/mdys82POLVLXqnhFjdODbkuIuJjClK5l2E56i5Ot7w=';
+    const saltB64 = vault.adminSaltB64 || 'Dj1rfFZQNiGlHz2MwHCwyQ==';
+    const hashB64 = vault.adminHashB64 || '+nk399sUdfI2UYBPn2rr362vzDBaA0mJML6vkE9IUXU=';
     const salt = Buffer.from(saltB64, 'base64');
     const expected = Buffer.from(hashB64, 'base64');
     const derived = crypto.pbkdf2Sync(clean, salt, vault.iterations || 210000, 32, 'sha256');
