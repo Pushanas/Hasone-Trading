@@ -24,8 +24,26 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(0);
   const [secondsRemaining, setSecondsRemaining] = useState(0);
+  const [isBanned, setIsBanned] = useState(false);
   const [clickCount, setClickCount] = useState<number>(0);
   const lastClickRef = React.useRef<number>(0);
+
+  useEffect(() => {
+    const checkBan = async () => {
+      try {
+        const res = await fetch('/api/security/check-ban');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.banned) {
+            setIsBanned(true);
+          }
+        }
+      } catch {}
+    };
+    checkBan();
+    const interval = setInterval(checkBan, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogoClick = () => {
     const now = Date.now();
@@ -180,8 +198,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         </div>
 
+        {/* Access Banned Notification */}
+        {isBanned && (
+          <div className="mb-4 p-4 rounded-2xl bg-rose-950/80 border border-rose-500 text-rose-200 text-center space-y-2 animate-pulse">
+            <div className="flex items-center justify-center gap-2 font-black text-rose-300 text-sm">
+              <span>⛔ تم حظر الوصول (Access Banned)</span>
+            </div>
+            <p className="text-xs leading-relaxed">
+              عذراً، تم حظر عنوان الـ IP الخاص بك نهائياً من الوصول إلى المنصة من قِبل إدارة حسون Trading.
+            </p>
+          </div>
+        )}
+
         {/* Kickout / Security Notification */}
-        {kickoutMessage && (
+        {kickoutMessage && !isBanned && (
           <div className="mb-4 p-3 rounded-xl bg-[var(--warning-soft)] border border-[var(--warning)] text-xs text-[var(--warning)] flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-[var(--warning)] shrink-0 mt-0.5" />
             <span>{kickoutMessage}</span>
@@ -200,7 +230,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                disabled={loading || secondsRemaining > 0}
+                disabled={loading || secondsRemaining > 0 || isBanned}
                 placeholder="HASSONE-VIP-... أو كلمة المرور"
                 className="w-full h-12 pr-10 pl-10 rounded-2xl bg-[var(--bg-input)] border-2 border-[var(--border-default)] text-[var(--text-primary)] text-sm font-mono focus:border-[var(--accent-tech)] focus:ring-1 focus:ring-[var(--accent-tech)] outline-none transition-all placeholder:text-[var(--text-muted)] text-center disabled:opacity-50"
                 autoFocus
@@ -242,7 +272,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <div className="pt-2">
             <button
               onClick={handleLogin}
-              disabled={loading || secondsRemaining > 0}
+              disabled={loading || secondsRemaining > 0 || isBanned}
               className="btn-primary w-full h-12 text-sm text-[var(--text-on-burgundy)] shadow-md disabled:opacity-50"
             >
               <Lock className="w-4 h-4 text-[var(--text-on-burgundy)]" />

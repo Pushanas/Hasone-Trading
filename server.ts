@@ -33,6 +33,23 @@ const app = express();
 app.set('trust proxy', true);
 app.use(express.json());
 
+// IP Permanent Ban Enforcement Middleware
+app.use((req, res, next) => {
+  // Allow check-ban endpoint to execute so client can know if banned
+  if (req.path === '/api/security/check-ban') {
+    return next();
+  }
+  const clientIp = getObservedPublicIp(req);
+  if (bannedIpsSet.has(clientIp)) {
+    return res.status(403).json({
+      success: false,
+      banned: true,
+      error: 'تم حظرك نهائياً من الوصول إلى المنصة من قبل الإدارة.',
+    });
+  }
+  next();
+});
+
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const AUTH_FILE = path.resolve(DATA_DIR, 'auth_vault.json');
 const LICENSES_FILE = path.resolve(DATA_DIR, 'licenses.json');
@@ -72,6 +89,8 @@ export interface LicenseRecord {
   durationDays: number;
   boundIp: string | null;
   boundDevice: string | null;
+  boundLocation?: string | null;
+  boundIsp?: string | null;
   firstActivatedAt: number | null;
   expiresAt: number | null;
   createdAt: string;
@@ -93,6 +112,14 @@ export interface VisitorSessionRecord {
   isLoggedIn?: boolean;
   loginType?: 'master' | 'license_vip' | 'none';
   licenseCode?: string | null;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  regionName?: string;
+  flag?: string;
+  isp?: string;
+  lat?: number;
+  lon?: number;
 }
 
 // Banned legacy passwords list
@@ -223,6 +250,35 @@ async function removeLicense(code: string) {
 }
 
 // Visitor Sessions persistence
+const bannedIpsSet = new Set<string>();
+
+async function loadBannedIps() {
+  if (firestoreDb) {
+    try {
+      const snap = await getDoc(doc(firestoreDb, 'analytics_settings', 'banned_ips'));
+      if (snap.exists() && Array.isArray(snap.data().ips)) {
+        snap.data().ips.forEach((ip: string) => bannedIpsSet.add(ip));
+        console.log(`[Firestore] Loaded ${bannedIpsSet.size} permanently banned IPs.`);
+      }
+    } catch (err) {
+      console.warn('[Firestore] Error loading banned IPs:', err);
+    }
+  }
+}
+
+async function persistBannedIps() {
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'analytics_settings', 'banned_ips'), {
+        ips: Array.from(bannedIpsSet),
+        updatedAt: Date.now(),
+      });
+    } catch (err) {
+      console.warn('[Firestore] Error persisting banned IPs:', err);
+    }
+  }
+}
+
 async function loadVisitorSessions() {
   if (firestoreDb) {
     try {
@@ -396,6 +452,115 @@ function parseUserAgentDetails(uaString?: string) {
   return { deviceCategory, os, browser };
 }
 
+// IP Geolocation Cache and Resolution Engine
+const geoCache = new Map<string, {
+  country: string;
+  countryCode: string;
+  city: string;
+  regionName: string;
+  flag: string;
+  isp: string;
+  lat: number;
+  lon: number;
+}>();
+
+const ARABIC_COUNTRIES: Record<string, string> = {
+  TR: 'تركيا',
+  EG: 'مصر',
+  SA: 'السعودية',
+  AE: 'الإمارات',
+  IQ: 'العراق',
+  JO: 'الأردن',
+  SY: 'سوريا',
+  LB: 'لبنان',
+  KW: 'الكويت',
+  QA: 'قطر',
+  OM: 'عُمان',
+  BH: 'البحرين',
+  YE: 'اليمن',
+  LY: 'ليبيا',
+  TN: 'تونس',
+  DZ: 'الجزائر',
+  MA: 'المغرب',
+  SD: 'السودان',
+  PS: 'فلسطين',
+  DE: 'ألمانيا',
+  GB: 'بريطانيا',
+  US: 'أمريكا',
+  FR: 'فرنسا',
+  NL: 'هولندا',
+  SE: 'السويد',
+  RU: 'روسيا',
+  IT: 'إيطاليا',
+  ES: 'إسبانيا',
+};
+
+function getCountryFlagEmoji(code?: string): string {
+  if (!code || code.length !== 2) return '🌐';
+  const c1 = 127397 + code.charCodeAt(0);
+  const c2 = 127397 + code.charCodeAt(1);
+  return String.fromCodePoint(c1, c2);
+}
+
+async function lookupIpGeoLocation(ip: string) {
+  if (!ip || ip === '127.0.0.1' || ip === '0.0.0.0' || ip === 'localhost') {
+    return {
+      country: 'محلي (Local)',
+      countryCode: 'LOC',
+      city: 'شبكة محلية',
+      regionName: '',
+      flag: '💻',
+      isp: 'Localhost',
+      lat: 0,
+      lon: 0,
+    };
+  }
+
+  if (geoCache.has(ip)) {
+    return geoCache.get(ip)!;
+  }
+
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,lat,lon,isp`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === 'success') {
+        const countryCode = String(data.countryCode || '').toUpperCase();
+        const arCountry = ARABIC_COUNTRIES[countryCode] || data.country || '';
+        const displayCountry = arCountry ? `${arCountry} (${data.country})` : data.country;
+        const flag = getCountryFlagEmoji(countryCode);
+        const geoInfo = {
+          country: displayCountry,
+          countryCode,
+          city: data.city || '',
+          regionName: data.regionName || '',
+          flag,
+          isp: data.isp || '',
+          lat: data.lat || 0,
+          lon: data.lon || 0,
+        };
+        geoCache.set(ip, geoInfo);
+        return geoInfo;
+      }
+    }
+  } catch {}
+
+  const fallback = {
+    country: 'غير محدد',
+    countryCode: 'UN',
+    city: 'غير متوفر',
+    regionName: '',
+    flag: '🌐',
+    isp: 'غير متوفر',
+    lat: 0,
+    lon: 0,
+  };
+  geoCache.set(ip, fallback);
+  return fallback;
+}
+
 async function markSessionLoggedIn(clientSid: string | undefined, ip: string, loginType: 'master' | 'license_vip', licenseCode?: string | null) {
   let session = clientSid && typeof clientSid === 'string' ? visitorSessionsMap.get(clientSid) : null;
   if (!session) {
@@ -407,11 +572,20 @@ async function markSessionLoggedIn(clientSid: string | undefined, ip: string, lo
       }
     }
   }
+  const geo = await lookupIpGeoLocation(ip);
   if (session) {
     session.isLoggedIn = true;
     session.loginType = loginType;
     session.licenseCode = licenseCode || null;
     session.lastActivity = Date.now();
+    session.country = geo.country;
+    session.countryCode = geo.countryCode;
+    session.city = geo.city;
+    session.regionName = geo.regionName;
+    session.flag = geo.flag;
+    session.isp = geo.isp;
+    session.lat = geo.lat;
+    session.lon = geo.lon;
     await persistVisitorSession(session);
   }
 }
@@ -462,8 +636,11 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
     // First time activation -> Bind to this IP and Device Fingerprint for durationDays!
     if (!lic.firstActivatedAt) {
+      const geo = await lookupIpGeoLocation(ip);
       lic.boundIp = ip;
       lic.boundDevice = devId;
+      lic.boundLocation = `${geo.flag} ${geo.country} - ${geo.city}`.trim();
+      lic.boundIsp = geo.isp;
       lic.firstActivatedAt = now;
       lic.expiresAt = now + (lic.durationDays || 30) * 24 * 60 * 60 * 1000;
       lic.status = 'active';
@@ -868,12 +1045,137 @@ app.post('/api/admin/delete-license', async (req: Request, res: Response) => {
   return res.json({ success: true, message: 'تم حذف الكود نهائياً من قاعدة البيانات.' });
 });
 
+// 7.0 Revoke Unused Codes (codes created by admin with no registrations/activations yet)
+app.post('/api/admin/revoke-unused-codes', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  let revokedCount = 0;
+  for (const lic of cachedLicenses) {
+    if (!lic.firstActivatedAt || (lic.usageCount || 0) === 0) {
+      if (lic.status !== 'revoked') {
+        lic.status = 'revoked';
+        await persistLicense(lic);
+        revokedCount++;
+      }
+    }
+  }
+
+  // Bump session version to force kickout of unauthenticated or unregistered clients
+  cachedVault.sessionVersion = `epoch_revoked_unused_${Date.now()}`;
+  saveVaultToLocalDisk(cachedVault);
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'auth_vault', 'admin'), cachedVault);
+    } catch {}
+  }
+
+  return res.json({
+    success: true,
+    revokedCount,
+    sessionVersion: cachedVault.sessionVersion,
+    message: `تم تعطيل وإلغاء كافة الأكواد غير المستخدمة (${revokedCount} كود) التي لم يسجل بها أحد، وطرد الجلسات غير المسجلة فوراً.`,
+  });
+});
+
+
 // 7.1 Unblock All IPs & Clear Lockouts
 app.post('/api/admin/unblock-all', (req: Request, res: Response) => {
   failedAttemptsMap.clear();
   return res.json({
     success: true,
     message: 'تم فك حظر وإلغاء القيود عن كافة عناوين IP بنجاح.',
+  });
+});
+
+// 7.1.0 Check if client IP is permanently banned
+app.get('/api/security/check-ban', (req: Request, res: Response) => {
+  const clientIp = getObservedPublicIp(req);
+  const banned = bannedIpsSet.has(clientIp);
+  return res.json({ success: true, banned, ip: clientIp });
+});
+
+// 7.1.1 Get Real Geographical Location for IP
+app.get('/api/admin/ip-info', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const queryIp = String(req.query.ip || '').trim();
+  if (!queryIp) {
+    return res.status(400).json({ success: false, error: 'عنوان IP مطلوب' });
+  }
+
+  const geo = await lookupIpGeoLocation(queryIp);
+  return res.json({
+    success: true,
+    ip: queryIp,
+    ...geo,
+    mapsUrl: geo.lat && geo.lon ? `https://www.google.com/maps?q=${geo.lat},${geo.lon}` : null,
+  });
+});
+
+// 7.1.2 Permanently Ban IP
+app.post('/api/admin/ban-ip', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const { ip } = req.body;
+  const cleanIp = String(ip || '').trim();
+  if (!cleanIp) {
+    return res.status(400).json({ success: false, error: 'عنوان IP مطلوب' });
+  }
+
+  bannedIpsSet.add(cleanIp);
+  await persistBannedIps();
+
+  // Also remove any active sessions matching this IP
+  const sessionDeletes: Promise<any>[] = [];
+  visitorSessionsMap.forEach((s, sid) => {
+    if (s.ip === cleanIp) {
+      sessionDeletes.push(deleteVisitorSessionRecord(sid));
+    }
+  });
+  await Promise.all(sessionDeletes);
+
+  return res.json({
+    success: true,
+    message: `تم حظر عنوان الـ IP (${cleanIp}) نهائياً من المنصة وطرد جلساته بنجاح. لن يتمكن من الدخول نهائياً.`,
+  });
+});
+
+// 7.1.3 Unban IP
+app.post('/api/admin/unban-ip', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const { ip } = req.body;
+  const cleanIp = String(ip || '').trim();
+  if (!cleanIp) {
+    return res.status(400).json({ success: false, error: 'عنوان IP مطلوب' });
+  }
+
+  bannedIpsSet.delete(cleanIp);
+  await persistBannedIps();
+
+  return res.json({
+    success: true,
+    message: `تم فك الحظر عن عنوان الـ IP (${cleanIp}) بنجاح.`,
+  });
+});
+
+// 7.1.4 Get All Banned IPs
+app.get('/api/admin/banned-ips', (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  return res.json({
+    success: true,
+    bannedIps: Array.from(bannedIpsSet),
   });
 });
 
@@ -947,12 +1249,21 @@ app.post('/api/analytics/session', async (req: Request, res: Response) => {
   const uaDetails = parseUserAgentDetails(req.headers['user-agent']);
 
   let session = visitorSessionsMap.get(sid);
+  const geo = await lookupIpGeoLocation(ip);
   if (session) {
     session.lastActivity = now;
     session.currentPath = cleanPath;
     session.pageViews = (session.pageViews || 1) + 1;
     session.status = 'active';
     session.ip = ip;
+    session.country = geo.country;
+    session.countryCode = geo.countryCode;
+    session.city = geo.city;
+    session.regionName = geo.regionName;
+    session.flag = geo.flag;
+    session.isp = geo.isp;
+    session.lat = geo.lat;
+    session.lon = geo.lon;
   } else {
     session = {
       sessionId: sid,
@@ -965,6 +1276,14 @@ app.post('/api/analytics/session', async (req: Request, res: Response) => {
       currentPath: cleanPath,
       pageViews: 1,
       status: 'active',
+      country: geo.country,
+      countryCode: geo.countryCode,
+      city: geo.city,
+      regionName: geo.regionName,
+      flag: geo.flag,
+      isp: geo.isp,
+      lat: geo.lat,
+      lon: geo.lon,
     };
   }
 
@@ -1886,6 +2205,7 @@ async function startServer() {
       loadVault(),
       loadLicenses(),
       loadVisitorSessions(),
+      loadBannedIps(),
     ]);
     console.log('[Startup] Persistent database records loaded successfully.');
   } catch (initErr) {

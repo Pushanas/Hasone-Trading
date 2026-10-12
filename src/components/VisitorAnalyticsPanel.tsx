@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   SlidersHorizontal,
   Key,
+  MapPin,
 } from 'lucide-react';
 import { collection, getDocs, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -35,6 +36,25 @@ interface VisitorSession {
   isLoggedIn?: boolean;
   loginType?: 'master' | 'license_vip' | 'none';
   licenseCode?: string | null;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  regionName?: string;
+  flag?: string;
+  isp?: string;
+  lat?: number;
+  lon?: number;
+}
+
+interface GeoDetails {
+  country: string;
+  countryCode: string;
+  city: string;
+  region: string;
+  flag: string;
+  isp: string;
+  lat?: number;
+  lon?: number;
 }
 
 interface AnalyticsSummary {
@@ -77,6 +97,7 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
   const [isCleaningUp, setIsCleaningUp] = useState<boolean>(false);
   const [isUnblockingIps, setIsUnblockingIps] = useState<boolean>(false);
   const [isPurgingIps, setIsPurgingIps] = useState<boolean>(false);
+  const [ipGeoMap, setIpGeoMap] = useState<Record<string, GeoDetails>>({});
 
   // Unblock all IPs & clear penalties
   const handleUnblockAllIps = async () => {
@@ -102,6 +123,35 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
       });
     } finally {
       setIsUnblockingIps(false);
+    }
+  };
+
+  // Permanently Ban IP
+  const handleBanIp = async (ip: string) => {
+    if (!ip || ip === '127.0.0.1') return;
+    if (!window.confirm(`هل أنت متأكد من حظر عنوان الـ IP (${ip}) نهائياً وطرد هذا المستخدم من المنصة؟`)) {
+      return;
+    }
+    setActionNotice(null);
+    try {
+      const res = await fetch('/api/admin/ban-ip', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({ ip }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        setActionNotice({ text: data.message, type: 'success' });
+        fetchVisitors(currentPage);
+        fetchSummary();
+      } else {
+        setActionNotice({ text: data.error || 'فشل حظر الـ IP', type: 'error' });
+      }
+    } catch {
+      setActionNotice({ text: 'حدث خطأ أثناء حظر الـ IP', type: 'error' });
     }
   };
 
@@ -301,6 +351,40 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
     }, 15000); // Live refresh every 15s
     return () => clearInterval(interval);
   }, [adminToken, statusFilter, searchTerm]);
+
+  // Resolve Real Geolocation for any unmapped IP addresses
+  useEffect(() => {
+    const unmappedIps = visitors
+      .map((v) => v.ip)
+      .filter((ip) => ip && ip !== '127.0.0.1' && ip !== '0.0.0.0' && !ipGeoMap[ip]);
+
+    if (unmappedIps.length === 0) return;
+
+    const uniqueIps = Array.from(new Set(unmappedIps));
+    uniqueIps.forEach(async (ip) => {
+      try {
+        const res = await fetch(`https://ipwho.is/${ip}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) {
+            setIpGeoMap((prev) => ({
+              ...prev,
+              [ip]: {
+                country: data.country || '',
+                countryCode: data.country_code || '',
+                city: data.city || '',
+                region: data.region || '',
+                flag: data.flag?.emoji || '🌐',
+                isp: data.connection?.isp || '',
+                lat: data.latitude,
+                lon: data.longitude,
+              },
+            }));
+          }
+        }
+      } catch {}
+    });
+  }, [visitors]);
 
   // Update retention policy
   const handleSaveRetention = async () => {
@@ -726,6 +810,7 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
             <thead>
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] text-[11px] text-[var(--text-secondary)] font-bold">
                 <th className="p-3 whitespace-nowrap">عنوان IP العام (المرصود)</th>
+                <th className="p-3 whitespace-nowrap">الموقع الحقيقي (الدولة والمدينة) 📍</th>
                 <th className="p-3 whitespace-nowrap">الحالة اللحظية</th>
                 <th className="p-3 whitespace-nowrap">حالة التسجيل</th>
                 <th className="p-3 whitespace-nowrap">الجهاز والمواصفات</th>
@@ -739,14 +824,14 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {loading && visitors.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={10} className="p-8 text-center text-[var(--text-muted)]">
                     <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--gold-primary)]" />
                     جارٍ تحميل سجلات وتحليلات الزوار...
                   </td>
                 </tr>
               ) : visitors.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={10} className="p-8 text-center text-[var(--text-muted)]">
                     لا توجد سجلات زوار تطابق معايير البحث الحالية.
                   </td>
                 </tr>
@@ -764,6 +849,67 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
                           {visitor.ip || '127.0.0.1'}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Real Geographical Location */}
+                    <td className="p-3 whitespace-nowrap">
+                      {(() => {
+                        const geo =
+                          ipGeoMap[visitor.ip] ||
+                          (visitor.country
+                            ? {
+                                country: visitor.country,
+                                countryCode: visitor.countryCode || '',
+                                city: visitor.city || '',
+                                region: visitor.regionName || '',
+                                flag: visitor.flag || '🌐',
+                                isp: visitor.isp || '',
+                                lat: visitor.lat,
+                                lon: visitor.lon,
+                              }
+                            : null);
+
+                        if (!geo) {
+                          return (
+                            <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                              {visitor.ip === '127.0.0.1' ? '💻 محلي (Localhost)' : 'جارٍ تحديد الموقع...'}
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 font-bold text-xs text-[var(--text-primary)]">
+                              <span className="text-sm shrink-0">{geo.flag}</span>
+                              <span className="text-emerald-400 font-bold">{geo.country}</span>
+                              {geo.city && (
+                                <span className="text-[var(--gold-primary)] font-mono text-[11px]">
+                                  • {geo.city}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px]">
+                              {geo.isp && (
+                                <span className="text-[var(--text-muted)] font-mono truncate max-w-[140px]" title={geo.isp}>
+                                  مزود: {geo.isp}
+                                </span>
+                              )}
+                              {geo.lat && geo.lon && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${geo.lat},${geo.lon}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-0.5 text-cyan-400 hover:text-cyan-300 font-bold underline cursor-pointer"
+                                  title="فتح العنوان على خرائط Google"
+                                >
+                                  <MapPin className="w-2.5 h-2.5" />
+                                  <span>خرائط Google 📍</span>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Status Badge */}

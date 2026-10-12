@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Zap, SlidersHorizontal, ListFilter, Calculator, Send, Timer } from 'lucide-react';
+import { Zap, SlidersHorizontal, ListFilter, Calculator, Send, Timer, ShieldAlert } from 'lucide-react';
 import { LoginView } from './components/LoginView';
 import { Header } from './components/Header';
 import { GeneratorPanel } from './components/GeneratorPanel';
@@ -23,11 +23,30 @@ const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 mins
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isBanned, setIsBanned] = useState<boolean>(false);
 
   const [kickoutAlert, setKickoutAlert] = useState<string | null>(null);
 
   // Navigation Tabs: NavTabType ('live' | 'generator' | 'analyzer' | 'collection' | 'table' | 'calculator')
   const [activeTab, setActiveTab] = useState<NavTabType>('live');
+
+  // Check permanent IP ban status periodically
+  useEffect(() => {
+    const checkBan = async () => {
+      try {
+        const res = await fetch('/api/security/check-ban');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.banned) {
+            setIsBanned(true);
+          }
+        }
+      } catch {}
+    };
+    checkBan();
+    const timer = setInterval(checkBan, 8000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Track initial visitor session and lightweight periodic heartbeat (~45s)
   useEffect(() => {
@@ -333,6 +352,39 @@ export default function App() {
   const handleResetSignals = () => {
     setSignals([]);
   };
+
+  // Render Permanent Ban Screen if IP is blacklisted
+  if (isBanned) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#07090e] text-slate-100" dir="rtl">
+        <div className="max-w-md w-full card-surface p-8 text-center border-rose-500/50 bg-gradient-to-br from-rose-950/40 via-[#07090e] to-slate-950 shadow-2xl space-y-5">
+          <div className="w-20 h-20 rounded-3xl bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center mx-auto text-rose-400 animate-pulse">
+            <ShieldAlert className="w-10 h-10" />
+          </div>
+          <h1 className="text-2xl font-black text-rose-400 tracking-tight">
+            تم حظرك نهائياً من المنصة
+          </h1>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            عذراً، لقد قامت إدارة منصة حسون - Trading بحظر عنوان الـ IP الخاص بك نهائياً من الوصول إلى النظام أو استعراض لوحة تسجيل الدخول.
+          </p>
+          <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/40 text-xs font-mono text-rose-300">
+            Status: Access Permanently Revoked & Blacklisted
+          </div>
+          <p className="text-xs text-slate-400">
+            للاستفسار أو تسوية الحسابات، يرجى التواصل مع الإدارة عبر تليجرام:
+          </p>
+          <a
+            href="https://t.me/QV_CODE"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-bold text-xs transition-all w-full"
+          >
+            <span>تواصل مع المطور: @QV_CODE</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   // Render Login if not authenticated
   if (!isAuthenticated) {

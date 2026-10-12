@@ -92,6 +92,8 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   const [newMasterPass, setNewMasterPass] = useState('');
   const [securityMsg, setSecurityMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isResettingAll, setIsResettingAll] = useState<boolean>(false);
+  const [isRevokingUnused, setIsRevokingUnused] = useState<boolean>(false);
+  const [boundGeoMap, setBoundGeoMap] = useState<Record<string, { location: string; isp: string }>>({});
 
   const fetchLicenses = async () => {
     setLoading(true);
@@ -146,6 +148,32 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       fetchLicenses();
     }
   }, [isOpen, adminToken]);
+
+  // Resolve Real Geolocation for bound IPs in codes
+  useEffect(() => {
+    const unmapped = licenses.filter(
+      (l) => l.boundIp && l.boundIp !== '127.0.0.1' && l.boundIp !== '0.0.0.0' && !boundGeoMap[l.boundIp]
+    );
+    if (unmapped.length === 0) return;
+
+    unmapped.forEach(async (l) => {
+      try {
+        const res = await fetch(`https://ipwho.is/${l.boundIp}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) {
+            setBoundGeoMap((prev) => ({
+              ...prev,
+              [l.boundIp!]: {
+                location: `${data.flag?.emoji || '🌐'} ${data.country} - ${data.city}`,
+                isp: data.connection?.isp || '',
+              },
+            }));
+          }
+        }
+      } catch {}
+    });
+  }, [licenses]);
 
   const handleCreateLicense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +293,53 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       fetchLicenses();
     } finally {
       setIsResettingAll(false);
+    }
+  };
+
+  const handleRevokeUnusedCodes = async () => {
+    if (!window.confirm('هل أنت متأكد من تعطيل وإلغاء كافة الأكواد التي لم يتم تسجيل الدخول بها بعد، وطرد أي جلسة غير مسجلة؟')) {
+      return;
+    }
+
+    setIsRevokingUnused(true);
+    try {
+      const res = await fetch('/api/admin/revoke-unused-codes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setActionMsg({ text: data.message || 'تم تعطيل الأكواد غير المستخدمة بنجاح.', type: 'success' });
+          fetchLicenses();
+          return;
+        }
+      }
+      throw new Error('Fallback');
+    } catch {
+      let count = 0;
+      const updated = licenses.map(l => {
+        if (!l.firstActivatedAt || (l.usageCount || 0) === 0) {
+          count++;
+          return { ...l, status: 'revoked' as const };
+        }
+        return l;
+      });
+      saveLocalLicenses(updated);
+      try {
+        for (const lic of updated) {
+          if (!lic.firstActivatedAt || (lic.usageCount || 0) === 0) {
+            await setDoc(doc(db, 'licenses', lic.code), { status: 'revoked' }, { merge: true });
+          }
+        }
+      } catch {}
+      setActionMsg({ text: `تم تعطيل ${count} كود غير مستخدم وطرد الجلسات غير المسجلة بنجاح.`, type: 'success' });
+      fetchLicenses();
+    } finally {
+      setIsRevokingUnused(false);
     }
   };
 
@@ -722,15 +797,26 @@ ${window.location.origin}`;
                     نظام أمان مشدد نشط — حماية الجلسات وتصفير الأجهزة
                   </span>
                 </div>
-                <button
-                  onClick={handleResetAllCodes}
-                  disabled={isResettingAll || licenses.length === 0}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                  title="إعادة تنشيط كافة الأكواد وفك ربط الهواتف والأجهزة وطرد المستخدمين المسجلين فوراً"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isResettingAll ? 'animate-spin' : ''}`} />
-                  <span>{isResettingAll ? 'جارٍ إعادة التنشيط...' : 'إعادة تنشيط كافة الأكواد وفك ربط الأجهزة'}</span>
-                </button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={handleRevokeUnusedCodes}
+                    disabled={isRevokingUnused || licenses.length === 0}
+                    className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    title="تعطيل وإلغاء كافة الأكواد التي لم يتم تسجيل الدخول بها بعد، وطرد أي جلسة غير مسجلة فوراً"
+                  >
+                    <Ban className={`w-3.5 h-3.5 ${isRevokingUnused ? 'animate-spin' : ''}`} />
+                    <span>{isRevokingUnused ? 'جارٍ تعطيل غير المستخدمة...' : 'تعطيل الأكواد غير المستخدمة وطرد غير المسجلين'}</span>
+                  </button>
+                  <button
+                    onClick={handleResetAllCodes}
+                    disabled={isResettingAll || licenses.length === 0}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    title="إعادة تنشيط كافة الأكواد وفك ربط الهواتف والأجهزة وطرد المستخدمين المسجلين فوراً"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isResettingAll ? 'animate-spin' : ''}`} />
+                    <span>{isResettingAll ? 'جارٍ إعادة التنشيط...' : 'إعادة تنشيط كافة الأكواد'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Codes Cards / Table */}
@@ -829,11 +915,28 @@ ${window.location.origin}`;
                           <div className="flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                             <span>الاستخدام:</span>
-                            <span className="font-mono font-bold text-cyan-400">
+                            <span className="font-mono font-bold text-cyan-300">
                               {lic.usageCount || 0} مرة
                             </span>
                           </div>
                         </div>
+
+                        {/* Real Geographical Location Row */}
+                        {lic.boundIp && lic.boundIp !== '127.0.0.1' && (
+                          <div className="flex flex-wrap items-center justify-between gap-1 p-2 rounded-xl bg-cyan-950/20 border border-cyan-800/30 text-[11px]">
+                            <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
+                              <span>الموقع الحقيقي:</span>
+                              <span className="text-emerald-400 font-mono">
+                                {boundGeoMap[lic.boundIp]?.location || (lic as any).boundLocation || 'جارٍ تحديد الموقع...'}
+                              </span>
+                            </span>
+                            {(boundGeoMap[lic.boundIp]?.isp || (lic as any).boundIsp) && (
+                              <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                                مزود: {boundGeoMap[lic.boundIp]?.isp || (lic as any).boundIsp}
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* Client Note */}
                         {lic.notes && (
