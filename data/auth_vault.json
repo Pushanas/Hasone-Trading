@@ -1,9 +1,9 @@
 {
-  "saltB64": "CJmB+8Vtq0YzoRSMMt5H0w==",
-  "hashB64": "HAwvf1EVzwY1kBwsw2Uehp1muICCCGefVsUpeBe9iq8=",
+  "saltB64": "KzjJk/DxuO2az4kMIMWiYw==",
+  "hashB64": "EHJ11gu21H1fUo673Gtew60Epxij6NUeywzt+iyeLQA=",
   "iterations": 210000,
-  "sessionVersion": "epoch_1791721258856_trading2026pro",
-  "adminSaltB64": "Dj1rfFZQNiGlHz2MwHCwyQ==",
-  "adminHashB64": "+nk399sUdfI2UYBPn2rr362vzDBaA0mJML6vkE9IUXU=",
-  "updatedAt": "2026-10-11T12:20:58.856Z"
+  "sessionVersion": "epoch_1791800000000_revoked_all_reset_2026",
+  "adminSaltB64": "pSPb6SP8Dq78vFdjL46Whg==",
+  "adminHashB64": "Jai37t0wwJuyASqeBMrqYOSJ/YQ4LiUVioLmXY48zwA=",
+  "updatedAt": "2026-10-12T08:05:00.000Z"
 }

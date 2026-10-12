@@ -2,9 +2,20 @@
 import { clientVerifyLicense } from './clientLicenseEngine';
 import { recordVisitorLogin } from './visitorTracker';
 
+const BANNED_PASSWORDS = [
+  'hasone#2026!vip',
+  'hasone#admin9481!vip',
+  'hasone@trading#2026!pro',
+  'hasone@master#8855!core',
+  'hasone#trading#2026!pro',
+  'hasone#master#8855!core',
+  'hasone@trading#2026!vip',
+  'hasone@admin#8855!core',
+];
+
 const DEFAULT_VAULT = {
-  saltB64: 'CJmB+8Vtq0YzoRSMMt5H0w==', // Hasone@Trading#2026!Pro
-  hashB64: 'HAwvf1EVzwY1kBwsw2Uehp1muICCCGefVsUpeBe9iq8=',
+  saltB64: 'KzjJk/DxuO2az4kMIMWiYw==', // Hasone#Trading2026!Master
+  hashB64: 'EHJ11gu21H1fUo673Gtew60Epxij6NUeywzt+iyeLQA=',
   iterations: 210000,
 };
 
@@ -57,7 +68,7 @@ export function getDeviceFingerprint(): string {
 // Client-side local PBKDF2 verification fallback
 async function localPbkdf2Verify(password: string): Promise<boolean> {
   const clean = password.trim();
-  if (clean.toLowerCase() === 'hasone#2026!vip' || clean.toLowerCase() === 'hasone#admin9481!vip') {
+  if (BANNED_PASSWORDS.includes(clean.toLowerCase())) {
     return false;
   }
 
@@ -112,7 +123,7 @@ export async function verifyMasterPassword(
     return { success: false, error: 'يرجى إدخال كود التفعيل VIP أو كلمة المرور' };
   }
 
-  if (clean.toLowerCase() === 'hasone#2026!vip' || clean.toLowerCase() === 'hasone#admin9481!vip') {
+  if (BANNED_PASSWORDS.includes(clean.toLowerCase())) {
     return {
       success: false,
       error: '⚠️ تم إلغاء وحظر كلمة المرور هذه نهائياً من قِبل إدارة حسون Trading وطرد كافة الجلسات المسجلة بها.',

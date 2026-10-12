@@ -22,9 +22,7 @@ import { initVisitorAnalytics, trackPageView } from './utils/visitorTracker';
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 mins
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem('areen_session_auth') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   const [kickoutAlert, setKickoutAlert] = useState<string | null>(null);
 
@@ -80,6 +78,9 @@ export default function App() {
     sessionStorage.removeItem('areen_lockout_until');
     localStorage.removeItem('areen_lockout_until');
     sessionStorage.removeItem('hasone_cached_ip');
+    sessionStorage.removeItem('areen_session_auth');
+    sessionStorage.removeItem('areen_session_version');
+    localStorage.removeItem('areen_session_auth');
     clearAllCreatedLicenses();
   }, []);
 
@@ -94,7 +95,7 @@ export default function App() {
     clearAllCreatedLicenses();
     setSignals([]);
     setKickoutAlert(
-      msg || 'تم تحديث أمان المنصة وطرد كافة الجلسات المسجلة بكلمات المرور الملغاة. يرجى تسجيل الدخول بالكلمات المعتمدة.'
+      msg || 'تم تحديث أمان المنصة وطرد كافة الجلسات المسجلة بكلمات المرور الملغاة وحذف الأكواد السابقة. يرجى تسجيل الدخول بالكلمة الجديدة المعتمدة.'
     );
   };
 

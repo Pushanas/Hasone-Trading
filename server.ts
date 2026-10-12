@@ -95,14 +95,26 @@ export interface VisitorSessionRecord {
   licenseCode?: string | null;
 }
 
+// Banned legacy passwords list
+const BANNED_PASSWORDS = [
+  'hasone#2026!vip',
+  'hasone#admin9481!vip',
+  'hasone@trading#2026!pro',
+  'hasone@master#8855!core',
+  'hasone#trading#2026!pro',
+  'hasone#master#8855!core',
+  'hasone@trading#2026!vip',
+  'hasone@admin#8855!core',
+];
+
 // Initial Default Vault configuration with ultra-secure Bot and Admin Passwords
 const INITIAL_VAULT: VaultData = {
-  saltB64: 'CJmB+8Vtq0YzoRSMMt5H0w==', // Hasone@Trading#2026!Pro
-  hashB64: 'HAwvf1EVzwY1kBwsw2Uehp1muICCCGefVsUpeBe9iq8=',
+  saltB64: 'KzjJk/DxuO2az4kMIMWiYw==', // Hasone#Trading2026!Master
+  hashB64: 'EHJ11gu21H1fUo673Gtew60Epxij6NUeywzt+iyeLQA=',
   iterations: 210000,
-  sessionVersion: `epoch_${Date.now()}_trading2026pro`,
-  adminSaltB64: 'Dj1rfFZQNiGlHz2MwHCwyQ==', // Hasone@Master#8855!Core
-  adminHashB64: '+nk399sUdfI2UYBPn2rr362vzDBaA0mJML6vkE9IUXU=',
+  sessionVersion: `epoch_${Date.now()}_revoked_all_reset_2026`,
+  adminSaltB64: 'pSPb6SP8Dq78vFdjL46Whg==', // Hasone#Admin2026!Shield
+  adminHashB64: 'Jai37t0wwJuyASqeBMrqYOSJ/YQ4LiUVioLmXY48zwA=',
   updatedAt: new Date().toISOString(),
 };
 
@@ -271,7 +283,7 @@ function verifyPasswordAgainstVault(password: string, vault: VaultData): boolean
     if (!clean) return false;
 
     // Reject banned/deleted passwords
-    if (clean.toLowerCase() === 'hasone#2026!vip' || clean.toLowerCase() === 'hasone#admin9481!vip') {
+    if (BANNED_PASSWORDS.includes(clean.toLowerCase())) {
       return false;
     }
 
@@ -290,12 +302,12 @@ function verifyAdminPasswordAgainstVault(password: string, vault: VaultData): bo
     if (!clean) return false;
 
     // Reject banned/deleted admin passwords
-    if (clean.toLowerCase() === 'hasone#admin9481!vip' || clean.toLowerCase() === 'hasone#2026!vip') {
+    if (BANNED_PASSWORDS.includes(clean.toLowerCase())) {
       return false;
     }
 
-    const saltB64 = vault.adminSaltB64 || 'Dj1rfFZQNiGlHz2MwHCwyQ==';
-    const hashB64 = vault.adminHashB64 || '+nk399sUdfI2UYBPn2rr362vzDBaA0mJML6vkE9IUXU=';
+    const saltB64 = vault.adminSaltB64 || 'pSPb6SP8Dq78vFdjL46Whg==';
+    const hashB64 = vault.adminHashB64 || 'Jai37t0wwJuyASqeBMrqYOSJ/YQ4LiUVioLmXY48zwA=';
     const salt = Buffer.from(saltB64, 'base64');
     const expected = Buffer.from(hashB64, 'base64');
     const derived = crypto.pbkdf2Sync(clean, salt, vault.iterations || 210000, 32, 'sha256');
@@ -422,10 +434,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 
   // Explicit ban on deleted legacy passwords
-  if (
-    inputSecret.toLowerCase() === 'hasone#2026!vip' ||
-    inputSecret.toLowerCase() === 'hasone#admin9481!vip'
-  ) {
+  if (BANNED_PASSWORDS.includes(inputSecret.toLowerCase())) {
     return res.status(403).json({
       success: false,
       error: '⚠️ تم إلغاء وحظر كلمة المرور هذه نهائياً من قِبل إدارة حسون Trading وطرد كافة الجلسات المسجلة بها.',
@@ -621,13 +630,10 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   const { password } = req.body;
   const clean = String(password || '').trim();
 
-  if (
-    clean.toLowerCase() === 'hasone#admin9481!vip' ||
-    clean.toLowerCase() === 'hasone#2026!vip'
-  ) {
+  if (BANNED_PASSWORDS.includes(clean.toLowerCase())) {
     return res.status(403).json({
       success: false,
-      error: '⚠️ تم إلغاء وحظر كلمة مرور الإدارة هذه نهائياً.',
+      error: '⚠️ تم إلغاء وحظر كلمة مرور الإدارة هذه نهائياً وطرد كافة الجلسات المرتبطة بها.',
     });
   }
 

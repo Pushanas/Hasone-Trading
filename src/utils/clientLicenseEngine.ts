@@ -29,8 +29,8 @@ const ADMIN_VAULT_KEY = 'hasone_admin_vault_v2';
 
 const SEED_LICENSES: LicenseRecord[] = [];
 
-// Official admin pass: Hasone@Master#8855!Core
-const DEFAULT_ADMIN_HASH = 'Hasone@Master#8855!Core';
+// Official admin pass: Hasone#Admin2026!Shield
+const DEFAULT_ADMIN_HASH = 'Hasone#Admin2026!Shield';
 
 /**
  * Retrieves client IP using high-speed public endpoint with instant fallback.
@@ -255,7 +255,13 @@ export function clearAllCreatedLicenses(): void {
   try {
     localStorage.removeItem(PRIMARY_STORAGE_KEY);
     localStorage.removeItem(BACKUP_STORAGE_KEY);
+    localStorage.removeItem(ADMIN_VAULT_KEY);
     localStorage.removeItem('areen_active_license');
+    localStorage.removeItem('areen_session_auth');
+    localStorage.removeItem('areen_session_version');
+    localStorage.removeItem('areen_auth_epoch');
+    localStorage.removeItem('areen_auth_salt');
+    localStorage.removeItem('areen_auth_hash');
   } catch {}
 }
 
@@ -264,7 +270,18 @@ export function clearAllCreatedLicenses(): void {
  */
 export function clientVerifyAdminPassword(password: string): boolean {
   const clean = password.trim();
-  return clean === 'Hasone@Master#8855!Core';
+  const banned = [
+    'hasone#2026!vip',
+    'hasone#admin9481!vip',
+    'hasone@trading#2026!pro',
+    'hasone@master#8855!core',
+    'hasone#trading#2026!pro',
+    'hasone#master#8855!core',
+    'hasone@trading#2026!vip',
+    'hasone@admin#8855!core',
+  ];
+  if (banned.includes(clean.toLowerCase())) return false;
+  return clean === 'Hasone#Admin2026!Shield';
 }
 
 /**
