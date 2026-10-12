@@ -24,31 +24,11 @@ export function getOrCreateSessionId(): string {
 }
 
 export async function fetchClientPublicIp(): Promise<string> {
-  const cached = sessionStorage.getItem('hasone_cached_ip');
-  if (cached && cached !== '127.0.0.1') return cached;
   try {
-    const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(2500) });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.ip) {
-        sessionStorage.setItem('hasone_cached_ip', data.ip);
-        return data.ip;
-      }
-    }
-  } catch {
-    // fallback to secondary provider
-    try {
-      const res2 = await fetch('https://api64.ipify.org?format=json', { signal: AbortSignal.timeout(2000) });
-      if (res2.ok) {
-        const d2 = await res2.json();
-        if (d2?.ip) {
-          sessionStorage.setItem('hasone_cached_ip', d2.ip);
-          return d2.ip;
-        }
-      }
-    } catch {}
-  }
-  return '127.0.0.1';
+    sessionStorage.removeItem('hasone_cached_ip');
+    localStorage.removeItem('hasone_cached_ip');
+  } catch {}
+  return '0.0.0.0';
 }
 
 export function parseClientUserAgent(uaString?: string) {
@@ -119,52 +99,9 @@ async function withTimeout<T>(promise: Promise<T>, ms: number = 3000): Promise<T
 /**
  * Persists session directly into Firestore to guarantee live display even when hosted statically on Vercel
  */
-async function syncSessionToFirestore(sessionId: string, currentPath: string) {
-  try {
-    const ip = await fetchClientPublicIp();
-    const ua = parseClientUserAgent();
-    const now = Date.now();
-    const sessionRef = doc(db, 'visitor_sessions', sessionId);
-    const existingSnap = await withTimeout(getDoc(sessionRef), 2500);
-
-    if (existingSnap.exists()) {
-      const data = existingSnap.data();
-      await withTimeout(
-        setDoc(
-          sessionRef,
-          {
-            lastActivity: now,
-            currentPath,
-            pageViews: (data.pageViews || 1) + 1,
-            status: 'active',
-            ip: ip && ip !== '127.0.0.1' ? ip : data.ip || '127.0.0.1',
-          },
-          { merge: true }
-        ),
-        2500
-      );
-    } else {
-      await withTimeout(
-        setDoc(sessionRef, {
-          sessionId,
-          ip: ip || '127.0.0.1',
-          deviceCategory: ua.deviceCategory,
-          browser: ua.browser,
-          os: ua.os,
-          firstVisit: now,
-          lastActivity: now,
-          currentPath,
-          pageViews: 1,
-          status: 'active',
-          isLoggedIn: false,
-          loginType: 'none',
-        }),
-        2500
-      );
-    }
-  } catch (err) {
-    // Non-blocking offline resilience
-  }
+async function syncSessionToFirestore(_sessionId: string, _currentPath: string) {
+  // Permanently disabled: No IP addresses or visitor sessions are stored in Firestore
+  return;
 }
 
 /**
@@ -173,56 +110,11 @@ async function syncSessionToFirestore(sessionId: string, currentPath: string) {
  * their record appears instantly in the Admin Dashboard!
  */
 export async function recordVisitorLogin(
-  loginType: 'master' | 'license_vip',
-  licenseCode?: string | null
+  _loginType: 'master' | 'license_vip',
+  _licenseCode?: string | null
 ) {
-  const sessionId = getOrCreateSessionId();
-  try {
-    const ip = await fetchClientPublicIp();
-    const now = Date.now();
-    const sessionRef = doc(db, 'visitor_sessions', sessionId);
-    const existingSnap = await withTimeout(getDoc(sessionRef), 2500);
-
-    if (existingSnap.exists()) {
-      await withTimeout(
-        setDoc(
-          sessionRef,
-          {
-            isLoggedIn: true,
-            loginType,
-            licenseCode: licenseCode || null,
-            lastActivity: now,
-            status: 'active',
-            ip: ip && ip !== '127.0.0.1' ? ip : existingSnap.data()?.ip || '127.0.0.1',
-          },
-          { merge: true }
-        ),
-        2500
-      );
-    } else {
-      const ua = parseClientUserAgent();
-      await withTimeout(
-        setDoc(sessionRef, {
-          sessionId,
-          ip: ip || '127.0.0.1',
-          deviceCategory: ua.deviceCategory,
-          browser: ua.browser,
-          os: ua.os,
-          firstVisit: now,
-          lastActivity: now,
-          currentPath: window.location.pathname || '/',
-          pageViews: 1,
-          status: 'active',
-          isLoggedIn: true,
-          loginType,
-          licenseCode: licenseCode || null,
-        }),
-        2500
-      );
-    }
-  } catch (err) {
-    // Non-blocking offline resilience
-  }
+  // Permanently disabled: No IP addresses or visitor sessions are stored in Firestore
+  return;
 }
 
 export function initVisitorAnalytics(currentPath: string = '/') {
@@ -248,16 +140,12 @@ export function initVisitorAnalytics(currentPath: string = '/') {
   const sendHeartbeat = () => {
     if (document.visibilityState === 'visible') {
       const now = Date.now();
-      // Server route
+      // Server route heartbeat only (no IP saved)
       fetch('/api/analytics/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId }),
       }).catch(() => {});
-
-      // Firestore heartbeat
-      const sessionRef = doc(db, 'visitor_sessions', sessionId);
-      setDoc(sessionRef, { lastActivity: now, status: 'active' }, { merge: true }).catch(() => {});
     }
   };
 

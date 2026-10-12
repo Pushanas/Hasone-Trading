@@ -250,14 +250,8 @@ async function loadVisitorSessions() {
 }
 
 async function persistVisitorSession(session: VisitorSessionRecord) {
+  session.ip = '0.0.0.0';
   visitorSessionsMap.set(session.sessionId, session);
-  if (firestoreDb) {
-    try {
-      await setDoc(doc(firestoreDb, 'visitor_sessions', session.sessionId), session);
-    } catch (err) {
-      console.warn('[Firestore] Error persisting visitor session:', session.sessionId, err);
-    }
-  }
 }
 
 async function deleteVisitorSessionRecord(sessionId: string) {
@@ -324,15 +318,8 @@ function checkAdminAuth(req: Request): boolean {
 // Rate limiting memory
 const failedAttemptsMap = new Map<string, { count: number; lockedUntil: number }>();
 
-function getObservedPublicIp(req: Request): string {
-  let ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
-  if (ip.startsWith('::ffff:')) {
-    ip = ip.substring(7);
-  }
-  if (ip.includes(',')) {
-    ip = ip.split(',')[0].trim();
-  }
-  return ip;
+function getObservedPublicIp(_req?: Request): string {
+  return '0.0.0.0';
 }
 
 function parseUserAgentDetails(uaString?: string) {

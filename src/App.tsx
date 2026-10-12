@@ -78,6 +78,7 @@ export default function App() {
     sessionStorage.removeItem('areen_lockout_until');
     localStorage.removeItem('areen_lockout_until');
     sessionStorage.removeItem('hasone_cached_ip');
+    localStorage.removeItem('hasone_cached_ip');
     sessionStorage.removeItem('areen_session_auth');
     sessionStorage.removeItem('areen_session_version');
     localStorage.removeItem('areen_session_auth');
