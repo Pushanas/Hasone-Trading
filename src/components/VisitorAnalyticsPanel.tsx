@@ -76,6 +76,7 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isCleaningUp, setIsCleaningUp] = useState<boolean>(false);
   const [isUnblockingIps, setIsUnblockingIps] = useState<boolean>(false);
+  const [isPurgingIps, setIsPurgingIps] = useState<boolean>(false);
 
   // Unblock all IPs & clear penalties
   const handleUnblockAllIps = async () => {
@@ -101,6 +102,56 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
       });
     } finally {
       setIsUnblockingIps(false);
+    }
+  };
+
+  // Purge all registered IPs and visitor records
+  const handlePurgeAllIps = async () => {
+    if (!window.confirm('هل أنت متأكد من حذف وتطهير كافة عناوين IP وسجلات الجلسات المسجلة نهائياً؟')) {
+      return;
+    }
+
+    setIsPurgingIps(true);
+    setActionNotice(null);
+    try {
+      const res = await fetch('/api/admin/purge-all-ips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        setActionNotice({
+          text: data.message || 'تم حذف وتطهير كافة عناوين IP وسجلات الجلسات بنجاح.',
+          type: 'success',
+        });
+        fetchSummary();
+        fetchVisitors(1);
+        return;
+      }
+      throw new Error('Vercel fallback');
+    } catch {
+      try {
+        const snap = await getDocs(collection(db, 'visitor_sessions'));
+        for (const d of snap.docs) {
+          await deleteDoc(doc(db, 'visitor_sessions', d.id));
+        }
+        setActionNotice({
+          text: 'تم حذف وتطهير كافة عناوين IP وسجلات الجلسات من قاعدة البيانات بنجاح.',
+          type: 'success',
+        });
+        fetchSummary();
+        fetchVisitors(1);
+      } catch {
+        setActionNotice({
+          text: 'حدث خطأ أثناء تطهير عناوين الـ IP',
+          type: 'error',
+        });
+      }
+    } finally {
+      setIsPurgingIps(false);
     }
   };
 
@@ -515,6 +566,16 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
             >
               <Shield className="w-3.5 h-3.5" />
               <span>{isUnblockingIps ? 'جارٍ فك الحظر...' : 'فك حظر كافة الـ IPs'}</span>
+            </button>
+
+            <button
+              onClick={handlePurgeAllIps}
+              disabled={isPurgingIps}
+              className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-800/40 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+              title="حذف وتطهير كافة عناوين الـ IP وسجلات الجلسات نهائياً"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isPurgingIps ? 'جارٍ تطهير الـ IPs...' : 'حذف وتطهير كافة الـ IPs'}</span>
             </button>
 
             <button

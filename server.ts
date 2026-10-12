@@ -234,23 +234,17 @@ async function loadVisitorSessions() {
         await setDoc(doc(firestoreDb, 'analytics_settings', 'config'), { retentionDays: 30, updatedAt: Date.now() });
       }
 
-      // Load sessions and force-logout all active logins from legacy credentials
+      // Purge all legacy sessions and registered IPs from database
       const snap = await getDocs(collection(firestoreDb, 'visitor_sessions'));
-      const updatePromises: Promise<any>[] = [];
+      const deletePromises: Promise<any>[] = [];
       snap.forEach((d) => {
-        const s = d.data() as VisitorSessionRecord;
-        if (s.isLoggedIn) {
-          s.isLoggedIn = false;
-          s.loginType = 'none';
-          s.licenseCode = null;
-          updatePromises.push(setDoc(doc(firestoreDb, 'visitor_sessions', s.sessionId), s).catch(() => {}));
-        }
-        visitorSessionsMap.set(s.sessionId, s);
+        deletePromises.push(deleteDoc(doc(firestoreDb, 'visitor_sessions', d.id)).catch(() => {}));
       });
-      await Promise.all(updatePromises);
-      console.log(`[Firestore] Successfully loaded and cleared logins for ${visitorSessionsMap.size} visitor sessions.`);
+      await Promise.all(deletePromises);
+      visitorSessionsMap.clear();
+      console.log(`[Firestore] Successfully purged ${deletePromises.length} legacy visitor sessions and registered IPs.`);
     } catch (err) {
-      console.warn('[Firestore] Error loading visitor sessions:', err);
+      console.warn('[Firestore] Error purging visitor sessions:', err);
     }
   }
 }
@@ -839,6 +833,37 @@ app.post('/api/admin/unblock-all', (req: Request, res: Response) => {
   return res.json({
     success: true,
     message: 'تم فك حظر وإلغاء القيود عن كافة عناوين IP بنجاح.',
+  });
+});
+
+// 7.2 Purge All Registered IP Addresses and Visitor Records
+app.post('/api/admin/purge-all-ips', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const purgedCount = visitorSessionsMap.size;
+  visitorSessionsMap.clear();
+  failedAttemptsMap.clear();
+
+  if (firestoreDb) {
+    try {
+      const snap = await getDocs(collection(firestoreDb, 'visitor_sessions'));
+      const deletes: Promise<any>[] = [];
+      snap.forEach((d) => {
+        deletes.push(deleteDoc(doc(firestoreDb, 'visitor_sessions', d.id)).catch(() => {}));
+      });
+      await Promise.all(deletes);
+      console.log(`[Firestore] Purged ${deletes.length} visitor IP records.`);
+    } catch (err) {
+      console.warn('[Firestore] Error purging visitor sessions:', err);
+    }
+  }
+
+  return res.json({
+    success: true,
+    purgedCount,
+    message: 'تم حذف وتطهير كافة عناوين IP وسجلات الجلسات المسجلة من قاعدة البيانات بنجاح.',
   });
 });
 
