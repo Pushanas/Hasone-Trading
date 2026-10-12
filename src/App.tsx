@@ -93,10 +93,11 @@ export default function App() {
     localStorage.removeItem('areen_auth_salt');
     localStorage.removeItem('areen_auth_hash');
     localStorage.removeItem('hasone_admin_vault_v2');
+    localStorage.removeItem('areen_active_license');
     clearAllCreatedLicenses();
     setSignals([]);
     setKickoutAlert(
-      msg || 'تم تحديث أمان المنصة وطرد كافة الجلسات المسجلة بكلمات المرور الملغاة وحذف الأكواد السابقة. يرجى تسجيل الدخول بالكلمة الجديدة المعتمدة.'
+      msg || '🛡️ تم تفعيل نظام الأمان المشدد وطرد كافة الجلسات المسجلة بالأكواد وإلغاء تنشيطها السابقة. يرجى مراجعة الإدارة أو تسجيل الدخول مجدداً.'
     );
   };
 

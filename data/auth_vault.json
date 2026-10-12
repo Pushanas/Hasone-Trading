@@ -2,8 +2,8 @@
   "saltB64": "KzjJk/DxuO2az4kMIMWiYw==",
   "hashB64": "EHJ11gu21H1fUo673Gtew60Epxij6NUeywzt+iyeLQA=",
   "iterations": 210000,
-  "sessionVersion": "epoch_1791800000000_revoked_all_reset_2026",
+  "sessionVersion": "epoch_1791796622373_strict_quarantine_1d34378ad800",
   "adminSaltB64": "pSPb6SP8Dq78vFdjL46Whg==",
   "adminHashB64": "Jai37t0wwJuyASqeBMrqYOSJ/YQ4LiUVioLmXY48zwA=",
-  "updatedAt": "2026-10-12T08:05:00.000Z"
+  "updatedAt": "2026-10-12T09:16:35.971Z"
 }

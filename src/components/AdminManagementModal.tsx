@@ -37,6 +37,7 @@ import {
   computeLicensesStats,
   clientCreateLicense,
   clientResetDevice,
+  clientResetAllCodes,
   clientToggleStatus,
   clientDeleteLicense,
   clientChangeAdminPassword,
@@ -90,6 +91,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   const [newAdminPass, setNewAdminPass] = useState('');
   const [newMasterPass, setNewMasterPass] = useState('');
   const [securityMsg, setSecurityMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isResettingAll, setIsResettingAll] = useState<boolean>(false);
 
   const fetchLicenses = async () => {
     setLoading(true);
@@ -224,6 +226,45 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       } catch {}
       setActionMsg({ text: localRes.message, type: 'success' });
       fetchLicenses();
+    }
+  };
+
+  const handleResetAllCodes = async () => {
+    if (!window.confirm('هل أنت متأكد من إعادة تنشيط كافة الأكواد، وفك ربط الهواتف والأجهزة، وطرد كافة المستخدمين المسجلين حالياً؟')) {
+      return;
+    }
+
+    setIsResettingAll(true);
+    try {
+      const res = await fetch('/api/admin/reset-all-codes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+      });
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setActionMsg({ text: data.message || 'تمت إعادة تنشيط كافة الأكواد وطرد المستخدمين بنجاح.', type: 'success' });
+          fetchLicenses();
+          return;
+        }
+      }
+      throw new Error('Fallback needed');
+    } catch {
+      const localRes = clientResetAllCodes();
+      try {
+        const snap = await getDocs(collection(db, 'licenses'));
+        for (const d of snap.docs) {
+          await setDoc(doc(db, 'licenses', d.id), { boundIp: null, boundDevice: null, firstActivatedAt: null, expiresAt: null, status: 'active', usageCount: 0 }, { merge: true });
+        }
+      } catch {}
+      setActionMsg({ text: localRes.message, type: 'success' });
+      fetchLicenses();
+    } finally {
+      setIsResettingAll(false);
     }
   };
 
@@ -671,6 +712,25 @@ ${window.location.origin}`;
                     ملغى / منتهي ({stats.expiredOrRevokedCount})
                   </button>
                 </div>
+              </div>
+
+              {/* Security & Reactivation Quick Actions Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)]">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-bold text-[var(--text-primary)]">
+                    نظام أمان مشدد نشط — حماية الجلسات وتصفير الأجهزة
+                  </span>
+                </div>
+                <button
+                  onClick={handleResetAllCodes}
+                  disabled={isResettingAll || licenses.length === 0}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  title="إعادة تنشيط كافة الأكواد وفك ربط الهواتف والأجهزة وطرد المستخدمين المسجلين فوراً"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isResettingAll ? 'animate-spin' : ''}`} />
+                  <span>{isResettingAll ? 'جارٍ إعادة التنشيط...' : 'إعادة تنشيط كافة الأكواد وفك ربط الأجهزة'}</span>
+                </button>
               </div>
 
               {/* Codes Cards / Table */}

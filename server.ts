@@ -112,7 +112,7 @@ const INITIAL_VAULT: VaultData = {
   saltB64: 'KzjJk/DxuO2az4kMIMWiYw==', // Hasone#Trading2026!Master
   hashB64: 'EHJ11gu21H1fUo673Gtew60Epxij6NUeywzt+iyeLQA=',
   iterations: 210000,
-  sessionVersion: `epoch_${Date.now()}_revoked_all_reset_2026`,
+  sessionVersion: `epoch_${Date.now()}_strict_quarantine_2026`,
   adminSaltB64: 'pSPb6SP8Dq78vFdjL46Whg==', // Hasone#Admin2026!Shield
   adminHashB64: 'Jai37t0wwJuyASqeBMrqYOSJ/YQ4LiUVioLmXY48zwA=',
   updatedAt: new Date().toISOString(),
@@ -776,6 +776,43 @@ app.post('/api/admin/reset-device', async (req: Request, res: Response) => {
   return res.json({
     success: true,
     message: 'تم فك ارتباط الجهاز والـ IP بنجاح! يمكن للعميل الآن استخدام الكود على هاتفه الجديد.',
+  });
+});
+
+// 5.1 Reset / Reactivate All License Codes & Kick Out All Connected Devices
+app.post('/api/admin/reset-all-codes', async (req: Request, res: Response) => {
+  if (!checkAdminAuth(req)) {
+    return res.status(401).json({ success: false, error: 'غير مصرح' });
+  }
+
+  const now = Date.now();
+  const resetPromises: Promise<any>[] = [];
+  cachedLicenses.forEach((lic) => {
+    lic.boundIp = null;
+    lic.boundDevice = null;
+    lic.firstActivatedAt = null;
+    lic.expiresAt = null;
+    lic.status = 'active';
+    lic.usageCount = 0;
+    resetPromises.push(persistLicense(lic));
+  });
+  await Promise.all(resetPromises);
+  saveLicensesToLocalDisk(cachedLicenses);
+
+  // Generate new session version to immediately kick out all devices
+  const newSessionVersion = `epoch_${now}_strict_quarantine_${crypto.randomBytes(6).toString('hex')}`;
+  cachedVault.sessionVersion = newSessionVersion;
+  await persistVault(cachedVault);
+
+  // Clear memory tracking
+  visitorSessionsMap.clear();
+  failedAttemptsMap.clear();
+
+  return res.json({
+    success: true,
+    totalReset: cachedLicenses.length,
+    newSessionVersion,
+    message: `تمت إعادة تنشيط جميع الأكواد (${cachedLicenses.length} كود)، وفك ربط كافة الأجهزة والـ IP، وطرد جميع المستخدمين المتصلين فوراً بنظام أمان مشدد.`,
   });
 });
 

@@ -335,6 +335,28 @@ export function clientResetDevice(code: string): { success: boolean; message: st
 }
 
 /**
+ * Resets and reactivates ALL codes locally, unbinding all devices and IPs.
+ */
+export function clientResetAllCodes(): { success: boolean; totalReset: number; message: string } {
+  const licenses = getLocalLicenses();
+  const resetList = licenses.map((lic) => ({
+    ...lic,
+    boundIp: null,
+    boundDevice: null,
+    firstActivatedAt: null,
+    expiresAt: null,
+    status: 'active' as const,
+    usageCount: 0,
+  }));
+  saveLocalLicenses(resetList);
+  return {
+    success: true,
+    totalReset: resetList.length,
+    message: `تمت إعادة تنشيط كافة الأكواد (${resetList.length} كود) وتصفير ربط الأجهزة والـ IP وطرد المستخدمين بنجاح.`,
+  };
+}
+
+/**
  * Toggles license active / revoked status.
  */
 export function clientToggleStatus(code: string): { success: boolean; message: string } {
