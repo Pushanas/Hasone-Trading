@@ -127,6 +127,59 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </p>
         </div>
 
+        {/* Status Notice Banner: Bot Suspended & Telegram Contact */}
+        <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-[var(--bg-elevated)] to-[var(--bg-surface)] border border-amber-500/40 shadow-lg relative overflow-hidden text-right">
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
+              <AlertCircle className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="flex-1 space-y-2.5">
+              <div>
+                <h3 className="text-xs sm:text-[13px] font-black text-amber-300 leading-tight">
+                  بوت متوقف حتا يتم دفع ثمن بوت
+                </h3>
+                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed">
+                  أي حد حابب ينشئ بوت مثله يتواصل.
+                </p>
+              </div>
+
+              {/* Subscriptions to other trading bots across all models */}
+              <div className="pt-2 border-t border-amber-500/20 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-cyan-300 font-bold text-[11px]">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span>اشتراك في بوتات أخرى (جميع نماذج التداول):</span>
+                </div>
+                <p className="text-[10.5px] text-[var(--text-secondary)] leading-relaxed">
+                  والي حابب يشترك ف بوتات آخره لجميع نماذج التداول يتواصل معنا عبر تليجرام:
+                </p>
+
+                <div className="pt-0.5">
+                  <a
+                    href="https://t.me/QV_CODE"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-between px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 text-xs font-bold transition-all shadow-xs group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-600 to-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-110 transition-transform">
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5 fill-white">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.88 7.99-3.44 3.82-1.6 4.61-1.88 5.13-1.89.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.13-.04.22z" />
+                        </svg>
+                      </div>
+                      <span className="text-[11px] text-[var(--text-secondary)] group-hover:text-cyan-200">
+                        تواصل تليجرام:
+                      </span>
+                    </div>
+                    <span className="font-mono text-cyan-400 group-hover:text-cyan-200" dir="ltr">
+                      @QV_CODE
+                    </span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Kickout / Security Notification */}
         {kickoutMessage && (
           <div className="mb-4 p-3 rounded-xl bg-[var(--warning-soft)] border border-[var(--warning)] text-xs text-[var(--warning)] flex items-start gap-2">
