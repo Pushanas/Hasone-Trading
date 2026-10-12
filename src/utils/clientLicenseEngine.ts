@@ -36,7 +36,17 @@ const DEFAULT_ADMIN_HASH = 'Hasone#Admin2026!Shield';
  * Retrieves client IP using high-speed public endpoint with instant fallback.
  */
 export async function getClientPublicIp(): Promise<string> {
-  return '0.0.0.0';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ip) return data.ip;
+    }
+  } catch {}
+  return '127.0.0.1';
 }
 
 /**

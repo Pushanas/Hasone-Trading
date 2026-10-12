@@ -234,24 +234,28 @@ async function loadVisitorSessions() {
         await setDoc(doc(firestoreDb, 'analytics_settings', 'config'), { retentionDays: 30, updatedAt: Date.now() });
       }
 
-      // Purge all legacy sessions and registered IPs from database
+      // Load visitor sessions from Firestore so Admin can inspect who registered
       const snap = await getDocs(collection(firestoreDb, 'visitor_sessions'));
-      const deletePromises: Promise<any>[] = [];
       snap.forEach((d) => {
-        deletePromises.push(deleteDoc(doc(firestoreDb, 'visitor_sessions', d.id)).catch(() => {}));
+        const s = d.data() as VisitorSessionRecord;
+        visitorSessionsMap.set(s.sessionId, s);
       });
-      await Promise.all(deletePromises);
-      visitorSessionsMap.clear();
-      console.log(`[Firestore] Successfully purged ${deletePromises.length} legacy visitor sessions and registered IPs.`);
+      console.log(`[Firestore] Loaded ${visitorSessionsMap.size} visitor sessions with IP telemetry.`);
     } catch (err) {
-      console.warn('[Firestore] Error purging visitor sessions:', err);
+      console.warn('[Firestore] Error loading visitor sessions:', err);
     }
   }
 }
 
 async function persistVisitorSession(session: VisitorSessionRecord) {
-  session.ip = '0.0.0.0';
   visitorSessionsMap.set(session.sessionId, session);
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, 'visitor_sessions', session.sessionId), session);
+    } catch (err) {
+      console.warn('[Firestore] Error persisting visitor session:', session.sessionId, err);
+    }
+  }
 }
 
 async function deleteVisitorSessionRecord(sessionId: string) {
@@ -318,8 +322,21 @@ function checkAdminAuth(req: Request): boolean {
 // Rate limiting memory
 const failedAttemptsMap = new Map<string, { count: number; lockedUntil: number }>();
 
-function getObservedPublicIp(_req?: Request): string {
-  return '0.0.0.0';
+function getObservedPublicIp(req?: Request): string {
+  if (!req) return '127.0.0.1';
+  let ip =
+    (req.headers['x-forwarded-for'] as string) ||
+    (req.headers['x-real-ip'] as string) ||
+    req.ip ||
+    req.socket.remoteAddress ||
+    '127.0.0.1';
+  if (ip.includes(',')) {
+    ip = ip.split(',')[0].trim();
+  }
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.substring(7);
+  }
+  return ip || '127.0.0.1';
 }
 
 function parseUserAgentDetails(uaString?: string) {

@@ -803,9 +803,9 @@ ${window.location.origin}`;
                         {/* Middle Row: Hardware / IP binding telemetry & Usage Count */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[var(--text-secondary)]">
                           <div className="flex items-center gap-1.5">
-                            <Globe className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+                            <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                             <span>عنوان الـ IP:</span>
-                            <span className="font-mono font-bold text-[var(--text-primary)]" dir="ltr">
+                            <span className="font-mono font-bold text-cyan-300 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40" dir="ltr">
                               {lic.boundIp || 'لم يتصل بعد'}
                             </span>
                           </div>

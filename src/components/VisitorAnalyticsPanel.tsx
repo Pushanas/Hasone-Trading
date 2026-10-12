@@ -758,9 +758,11 @@ export const VisitorAnalyticsPanel: React.FC<VisitorAnalyticsPanelProps> = ({ ad
                   >
                     {/* IP */}
                     <td className="p-3 whitespace-nowrap font-mono font-bold text-[var(--text-primary)]">
-                      <div className="flex items-center gap-1.5">
-                        <Globe className="w-3.5 h-3.5 text-emerald-400 opacity-80" />
-                        <span className="text-emerald-400/90 text-xs font-mono" dir="ltr">0.0.0.0 (محمي)</span>
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span className="text-cyan-300 font-mono text-xs select-all bg-cyan-950/40 px-2 py-0.5 rounded-md border border-cyan-800/40" dir="ltr">
+                          {visitor.ip || '127.0.0.1'}
+                        </span>
                       </div>
                     </td>
 
